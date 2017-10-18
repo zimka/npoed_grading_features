@@ -1,20 +1,31 @@
 """
-This file contains all necessary updates to apply vertical grading
+This file contains mixins that should be used in edx to apply vertical grading.
 """
 from collections import OrderedDict
 from lazy import lazy
 
-from django.conf import settings
+from xblock.fields import Integer, Scope
+
 
 from lms.djangoapps.grades.scores import get_score, possibly_scored
 from xmodule.graders import ProblemScore
 
+from .utils import feature_enabled
+_ = lambda text: text
+
 
 class VerticalBase(object):
+    """
+    This is base class that provides new way to compute subsection score.
+    To minimize invasions into edX code we use special hack.
+    Because the main graded element in VG is vertical(unit) but not the problem,
+    score for vertical is computed based on problems it consists of and ProblemScore
+    with this result is forged. These forged ProblemScores are being fed to grader then.
+    """
     VERTICAL_CATEGORY = "vertical"
 
     def _vertical_enabled(self):
-        return settings.FEATURES.get("ENABLE_VERTICAL_GRADING")
+        return feature_enabled()
 
     def _get_vertical_score(
             self,
@@ -75,13 +86,8 @@ class VerticalBase(object):
 
 class VerticalGradingSubsectionMixin(VerticalBase):
     """
-    This mixin should be inherited by SubsectionGrade.
-    It provides two ways to compute scores: the 'classic' one and
-    the 'unit-weighted' one.
-    In case ot the last one units are considered as minimal graded element
-    in course instead of the problem: they have their own weight, and problem's
-    scores are used only to calculate complete percent for unit.
-    Therefore it computes scores for units and mock them as problem scores.
+    This mixin should be inherited by lms.djangoapps.grade.new.subsection_grade.py:SubsectionGrade.
+    It changes the way score is computed for subsection.
     """
 
     def __init__(self, *args, **kwargs):
@@ -109,7 +115,9 @@ class VerticalGradingSubsectionMixin(VerticalBase):
 
 
 class VerticalGradingZeroSubsectionMixin(VerticalBase):
-
+    """
+    This mixin should be inherited by lms.djangoapps.grade.new.subsection_grade.py:ZeroSubsectionGrade.
+    """
     def __init__(self, *args, **kwargs):
         if self._vertical_enabled():
             self.locations_to_scores = self._vertical_locations_to_scores
@@ -137,3 +145,17 @@ class VerticalGradingZeroSubsectionMixin(VerticalBase):
             if vertical_score:
                 locations[block_key] = vertical_score
         return locations
+
+
+class VerticalGradingBlockMixin(object):
+    """
+    This is mixin for common.lib.xmodule.xmodule.vertical_block.py:VerticalBlock
+    It adds field 'weight' field to the verticals
+    """
+    weight = Integer(
+        display_name=_("Weight"),
+        help=_(
+            "Defines the proportion of contribution of the vertical to the category."),
+        default=1.0,
+        scope=Scope.settings
+    )
