@@ -21,6 +21,9 @@ def vertical_grading_xblock_info(create_xblock_info):
         if xblock_info.get("category", False) == 'vertical':
             weight = getattr(xblock, 'weight', 0)
             xblock_info['weight'] = weight
+            parent_xblock = kwargs.get('parent_xblock', None)
+            if parent_xblock:
+                xblock_info['format'] = parent_xblock.format
         return xblock_info
 
     return wrapped

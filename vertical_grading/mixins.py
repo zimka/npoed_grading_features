@@ -155,7 +155,7 @@ class VerticalGradingBlockMixin(object):
     weight = Integer(
         display_name=_("Weight"),
         help=_(
-            "Defines the proportion of contribution of the vertical to the category."),
-        default=1.0,
+            "Defines the contribution of the vertical to the category score."),
+        default=0.0,
         scope=Scope.settings
     )
