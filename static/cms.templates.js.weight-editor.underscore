@@ -2,14 +2,26 @@
     <ul class="list-fields list-input">
         <li class="field field-number field-weight">
             <label for="weight" class="label"><%= gettext('Weight') %></label>
-            <input class="input" id="weight" type="number" value="<%= xblockInfo.get('weight') %>" min="0" step="1" />
+            <input class="input" id="weight" type="number" min="0" step="1"
+                <% if (!(xblockInfo.get('format'))) {%>
+                    disabled
+                <% } else { %>
+                    value="<%= xblockInfo.get('weight') %>"
+                <% } %>
+            />
         </li>
         <li>
-            <p class="field-message">
-                Graded as <%= xblockInfo.get('format') %>. You can change it in parent subsection settings. </p>
-            <p class="field-message">
-                Units with weight 0 are not graded. Units without problems are not graded (even with non-zero weight).
-            </p>
+            <% if (xblockInfo.get('format')) {%>
+                <p class="field-message">
+                    Graded as <%= xblockInfo.get('format') %>. You can change it in parent subsection settings. </p>
+                <p class="field-message">
+                    Units with weight 0 are not graded. Units without problems are not graded (even with non-zero weight).
+                </p>
+            <% } else { %>
+             <p class="field-message">
+                To set weight you have to choose grading category in parent subsection.
+             </p>
+            <% } %>
         </li>
         <br>
     </ul>
