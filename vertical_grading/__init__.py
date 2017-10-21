@@ -1,2 +1,2 @@
-from .mixins import VerticalGradingSubsectionMixin, VerticalGradingZeroSubsectionMixin, VerticalGradingBlockMixin
-from .utils import vertical_grading_xblock_info
+from .utils import vertical_grading_xblock_info, vertical_grading_assignment_grade
+from .decorator import enable_vertical_grading

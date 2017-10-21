@@ -27,3 +27,40 @@ def vertical_grading_xblock_info(create_xblock_info):
         return xblock_info
 
     return wrapped
+
+
+def vertical_grading_assignment_grade(grade):
+    """
+    This is decorator for common.lib.xmodule.xmodule.py:AssignmentFormatGrader.grade
+    It replaces subsection min-value-score drop by vertical min-value-score drop
+    """
+    if not feature_enabled():
+        return grade
+
+    def drop_lowest_problems(category_grade_sheet, drop_count):
+        if not drop_count:
+            return category_grade_sheet
+        locations_to_scores = {}
+        for subsection_key in category_grade_sheet:
+            current_locations_to_scores = category_grade_sheet[subsection_key].locations_to_scores
+
+    @wraps(grade)
+    def wrapped(self, grade_sheet, *args, **kwargs):
+        drop_count = self.drop_count
+        self.drop_count = 0
+        current_sheet = grade_sheet.get(self.category)
+        if current_sheet:
+            for k, v in current_sheet.items():
+                graded_total = v.graded_total
+                if graded_total:
+                    print(k,type(v), graded_total.earned, "/", graded_total.possible)
+                else:
+                    print(k,type(v), graded_total)
+        else:
+            print(self.category, "NO_SHEET")
+        print("--------")
+        grade_results = grade(self, grade_sheet, *args, **kwargs)
+        self.drop_count = drop_count
+        return grade_results
+
+    return wrapped
