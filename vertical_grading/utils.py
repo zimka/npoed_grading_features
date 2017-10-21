@@ -1,32 +1,13 @@
 from functools import wraps
+
 from django.conf import settings
+from xmodule.graders import ProblemScore
+
+from lms.djangoapps.grades.scores import get_score
 
 
 def feature_enabled():
     return settings.FEATURES.get("ENABLE_VERTICAL_GRADING")
-
-
-def vertical_grading_xblock_info(create_xblock_info):
-    """
-    This is decorator for cms.djangoapps.contentstore.item.py:create_xblock_info
-    It adds vertical block weight to the available for rendering info
-    """
-    if not feature_enabled():
-        return create_xblock_info
-
-    @wraps(create_xblock_info)
-    def wrapped(*args, **kwargs):
-        xblock = kwargs.get('xblock', False) or args[0]
-        xblock_info = create_xblock_info(*args, **kwargs)
-        if xblock_info.get("category", False) == 'vertical':
-            weight = getattr(xblock, 'weight', 0)
-            xblock_info['weight'] = weight
-            parent_xblock = kwargs.get('parent_xblock', None)
-            if parent_xblock:
-                xblock_info['format'] = parent_xblock.format
-        return xblock_info
-
-    return wrapped
 
 
 def vertical_grading_assignment_grade(grade):
@@ -64,3 +45,59 @@ def vertical_grading_assignment_grade(grade):
         return grade_results
 
     return wrapped
+
+
+VERTICAL_CATEGORY = 'vertical'
+
+
+def get_vertical_score(
+        cls,
+        block_key,
+        course_structure,
+        submissions_scores,
+        csm_scores,
+        persisted_block=None
+):
+    if block_key.category != VERTICAL_CATEGORY:
+        return
+    vertical_weight = getattr(course_structure[block_key], "weight", None)
+    if not vertical_weight:
+        return
+    children_keys = course_structure.get_children(block_key)
+    children_scores = []
+    for child_key in children_keys:
+        try:
+            block = course_structure[child_key]
+        except KeyError:
+            # It's possible that the user's access to that
+            # block has changed since the subsection grade
+            # was last persisted.
+            pass
+        else:
+            if getattr(block, 'has_score', False):
+                problem_score = get_score(
+                    submissions_scores,
+                    csm_scores,
+                    persisted_block,
+                    block,
+                )
+                if problem_score:
+                    children_scores.append(problem_score)
+    if not children_scores:
+        return
+    vertical_possible = sum(score.possible for score in children_scores)
+    vertical_earned = sum(score.earned for score in children_scores)
+    weighted_earned = vertical_weight * float(vertical_earned) / vertical_possible
+    weighted_possible = vertical_weight
+    vertical_attempted = any(score.attempted for score in children_scores)
+    vertical_graded = any(score.graded for score in children_scores)
+    vertical_pseudo_problem = ProblemScore(
+        raw_earned=vertical_earned,
+        raw_possible=vertical_possible,
+        weighted_earned=weighted_earned,
+        weighted_possible=weighted_possible,
+        weight=vertical_weight,
+        graded=vertical_graded,
+        attempted=vertical_attempted
+    )
+    return vertical_pseudo_problem

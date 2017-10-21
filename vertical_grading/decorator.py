@@ -1,10 +1,14 @@
 from collections import OrderedDict
+from functools import wraps
+
 from lazy import lazy
 
 from xblock.fields import Integer, Scope
+
+from .utils import get_vertical_score, feature_enabled
+from lms.djangoapps.grades.scores import possibly_scored
 _ = lambda text: text
-from .mixins import VerticalBase, possibly_scored
-from .utils import vertical_grading_xblock_info
+
 
 def build_subsection_grade(class_):
 
@@ -16,7 +20,7 @@ def build_subsection_grade(class_):
             csm_scores,
             persisted_block=None,
     ):
-        vertical_pseudo_problem_score = VerticalBase._get_vertical_score(
+        vertical_pseudo_problem_score = get_vertical_score(
             block_key,
             course_structure,
             submissions_scores,
@@ -27,7 +31,7 @@ def build_subsection_grade(class_):
             self.locations_to_scores[block_key] = vertical_pseudo_problem_score
 
     def _compute_block_score(self, *args, **kwargs):
-        if VerticalBase._vertical_enabled():
+        if feature_enabled():
             return self._vertical_compute_block_score(*args, **kwargs)
         else:
             return self._problem_compute_block_score(self, *args, **kwargs)
@@ -63,7 +67,7 @@ def build_zero_subsection_grade(class_):
         return locations
 
     def locations_to_scores(self):
-        if VerticalBase._vertical_enabled():
+        if feature_enabled():
             return self._vertical_locations_to_scores
         else:
             return self._old_locations_to_scores
@@ -84,6 +88,7 @@ def build_vertical_block(class_):
     )
     return class_
 
+
 def build_create_xblock_info(func):
     return vertical_grading_xblock_info(func)
 
@@ -101,3 +106,26 @@ def enable_vertical_grading(obj):
         constructor = replaced.get(name)
         return constructor(obj)
     return obj
+
+
+def vertical_grading_xblock_info(create_xblock_info):
+    """
+    This is decorator for cms.djangoapps.contentstore.item.py:create_xblock_info
+    It adds vertical block weight to the available for rendering info
+    """
+    if not feature_enabled():
+        return create_xblock_info
+
+    @wraps(create_xblock_info)
+    def wrapped(*args, **kwargs):
+        xblock = kwargs.get('xblock', False) or args[0]
+        xblock_info = create_xblock_info(*args, **kwargs)
+        if xblock_info.get("category", False) == 'vertical':
+            weight = getattr(xblock, 'weight', 0)
+            xblock_info['weight'] = weight
+            parent_xblock = kwargs.get('parent_xblock', None)
+            if parent_xblock:
+                xblock_info['format'] = parent_xblock.format
+        return xblock_info
+
+    return wrapped
