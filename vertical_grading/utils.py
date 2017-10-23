@@ -1,63 +1,24 @@
 from functools import wraps
 
 from django.conf import settings
-from xmodule.graders import ProblemScore
 
-from lms.djangoapps.grades.scores import get_score
 
 
 def feature_enabled():
     return settings.FEATURES.get("ENABLE_VERTICAL_GRADING")
 
-
-def vertical_grading_assignment_grade(grade):
-    """
-    This is decorator for common.lib.xmodule.xmodule.py:AssignmentFormatGrader.grade
-    It replaces subsection min-value-score drop by vertical min-value-score drop
-    """
-    if not feature_enabled():
-        return grade
-
-    def drop_lowest_problems(category_grade_sheet, drop_count):
-        if not drop_count:
-            return category_grade_sheet
-        locations_to_scores = {}
-        for subsection_key in category_grade_sheet:
-            current_locations_to_scores = category_grade_sheet[subsection_key].locations_to_scores
-
-    @wraps(grade)
-    def wrapped(self, grade_sheet, *args, **kwargs):
-        drop_count = self.drop_count
-        self.drop_count = 0
-        current_sheet = grade_sheet.get(self.category)
-        if current_sheet:
-            for k, v in current_sheet.items():
-                graded_total = v.graded_total
-                if graded_total:
-                    print(k,type(v), graded_total.earned, "/", graded_total.possible)
-                else:
-                    print(k,type(v), graded_total)
-        else:
-            print(self.category, "NO_SHEET")
-        print("--------")
-        grade_results = grade(self, grade_sheet, *args, **kwargs)
-        self.drop_count = drop_count
-        return grade_results
-
-    return wrapped
-
-
 VERTICAL_CATEGORY = 'vertical'
 
 
 def get_vertical_score(
-        cls,
         block_key,
         course_structure,
         submissions_scores,
         csm_scores,
         persisted_block=None
 ):
+    from lms.djangoapps.grades.scores import get_score, ProblemScore # placed here to avoid circular import
+
     if block_key.category != VERTICAL_CATEGORY:
         return
     vertical_weight = getattr(course_structure[block_key], "weight", None)
@@ -101,3 +62,29 @@ def get_vertical_score(
         attempted=vertical_attempted
     )
     return vertical_pseudo_problem
+
+
+def drop_minimal_vertical_from_subsection_grades(subsection_grades):
+    max_lost_points = -1
+    max_lost_points_index = (-1, "None")
+
+    for num, grade in enumerate(subsection_grades):
+        for block_key, problem_score in grade.locations_to_scores.items():
+            lost_points = problem_score.possible - problem_score.earned
+            if lost_points > max_lost_points:
+                max_lost_points = lost_points
+                max_lost_points_index = (num, block_key)
+    if max_lost_points == -1:
+        return subsection_grades
+    modified_grade = subsection_grades[max_lost_points_index[0]]
+    subtracted_score = modified_grade.locations_to_scores.pop(max_lost_points_index[1])
+    modified_grade.graded_total.earned -= subtracted_score.earned
+    modified_grade.graded_total.possible -= subtracted_score.possible
+
+    #TODO: should show all total?
+    modified_grade.all_total.earned -= subtracted_score.earned
+    modified_grade.all_total.possible -= subtracted_score.possible
+    #TODO: should pop subsection grade or forbid to pop last problem score?
+    if not modified_grade.graded_total.possible:
+        modified_grade.graded_total.possible = 1e-6
+    return subsection_grades

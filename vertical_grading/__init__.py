@@ -1,3 +1,1 @@
-from .utils import vertical_grading_assignment_grade
-from ext.vertical_grading.vertical_grading.decorator import vertical_grading_xblock_info
-from .decorator import enable_vertical_grading
+from .enable_vertical_grading import enable_vertical_grading
