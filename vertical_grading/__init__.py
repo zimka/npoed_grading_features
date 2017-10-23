@@ -1,1 +1,2 @@
 from .enable_vertical_grading import enable_vertical_grading
+from .enable_passing_grade import enable_passing_grade
