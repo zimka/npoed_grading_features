@@ -8,9 +8,9 @@ with open(os.path.join(os.path.dirname(__file__), 'README.rst')) as readme:
 os.chdir(os.path.normpath(os.path.join(os.path.abspath(__file__), os.pardir)))
 
 setup(
-    name='vertical-grading',
+    name='npoed-grading-features',
     version='0.1',
-    packages=['vertical_grading'],
+    packages=['npoed_grading_features'],
     include_package_data=True,
     description='Vertical grading extension for openedx',
     long_description=README,
