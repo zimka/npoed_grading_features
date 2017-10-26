@@ -14,7 +14,11 @@ class NpoedGradingFeatures(models.Model):
     course_id = models.CharField(max_length=255, unique=True)
     vertical_grading = models.BooleanField(default=False)
     passing_grade = models.BooleanField(default=False)
-
+    silence_minimal_grade_credit_requirement = models.BooleanField(
+        default=True,
+        verbose_name="This fields fixes auto-generation of minimal_grade requirement." \
+                     "If you want to use this credit requirement, you must turn it OFF."
+    )
     @classmethod
     def is_vertical_grading_enabled(cls, course_id):
         return cls._is_feature_enabled(course_id, 'vertical_grading')
@@ -39,6 +43,13 @@ class NpoedGradingFeatures(models.Model):
     def disable_passing_grade(cls, course_id):
         cls._switch_feature(course_id, "passing_grade", False)
 
+    @classmethod
+    def get(cls, course_id):
+        cid = cls._get_id(course_id)
+        try:
+            return cls.objects.get(course_id=cid)
+        except cls.DoesNotExist:
+            return None
 
     @classmethod
     def _get_id(cls, course_id):

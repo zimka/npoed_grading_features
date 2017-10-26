@@ -1,6 +1,7 @@
 from django.conf import settings
 from .models import NpoedGradingFeatures
-
+from functools import wraps
+from xmodule.modulestore.django import modulestore
 _ = lambda text: text
 
 
@@ -119,10 +120,43 @@ def build_course_grade(class_):
     return class_
 
 
+def _get_passing_grade_requirements(course_key):
+    course = modulestore().get_course(course_key)
+    graders = course.grading_policy['GRADER']
+    passing_grades = dict((x['type'], x['passing_grade']) for x in graders)
+    return [
+        {
+            "namespace": "passing_grade",
+            "name": "{category} percent".format(category=category),
+            "display_name": "Minimum {category} Percent".format(category=category),
+            "criteria": {
+                "min_category_percent": passing_grades[category]
+            },
+        }
+        for category in passing_grades
+    ]
+
+def build__get_course_credit_requirements(func):
+    @wraps(func)
+    def wrapped(course_key):
+        credit_requirements = func(course_key)
+        grading_features = NpoedGradingFeatures.get(course_key)
+        if not grading_features.passing_grade:
+            return credit_requirements
+        if grading_features.silence_minimal_grade_credit_requirement:
+            credit_requirements = [x for x in credit_requirements if x['name'] != 'grade']
+        passing_grade_requirements = _get_passing_grade_requirements(course_key)
+        credit_requirements += passing_grade_requirements
+        return credit_requirements
+    return wrapped
+
+
 replaced = {
     "CourseGradingModel": build_course_grading_model,
     "CourseGrade": build_course_grade,
+    "_get_course_credit_requirements": build__get_course_credit_requirements,
 }
+
 
 
 def enable_passing_grade(class_):
