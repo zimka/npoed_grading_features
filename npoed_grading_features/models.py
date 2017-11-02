@@ -3,24 +3,14 @@ from django.contrib.auth.models import User
 from opaque_keys.edx.keys import CourseKey
 import json
 
-_FEATURES = (
-    "vertical_grading",
-    "passing_grade"
-)
-
 
 class NpoedGradingFeatures(models.Model):
     """
-    This models defines for which courses npoed grading features are enabled.
+    Defines for which courses which npoed grading features are enabled.
     """
     course_id = models.CharField(max_length=255, unique=True)
     vertical_grading = models.BooleanField(default=False)
     passing_grade = models.BooleanField(default=False)
-    silence_minimal_grade_credit_requirement = models.BooleanField(
-        default=True,
-        verbose_name="This fields fixes auto-generation of minimal_grade requirement." \
-                     "If you want to use this credit requirement, you must turn it OFF."
-    )
 
     @classmethod
     def is_vertical_grading_enabled(cls, course_id):
@@ -78,6 +68,12 @@ class NpoedGradingFeatures(models.Model):
 
 
 class CoursePassingGradeUserStatus(models.Model):
+    """
+    Stores course passing grade results for student. Results are
+    stored as a json-ized list of messages where is specified which
+    passing grades are failed by user. These messages are shown at
+    progress page as unmet requirements.
+    """
     course_id = models.CharField(max_length=255)
     user = models.ForeignKey(User)
     fail_status_messages = models.TextField(

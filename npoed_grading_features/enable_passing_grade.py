@@ -8,6 +8,9 @@ NOT_PASSED_MESSAGE_TEMPLATE = _("You must earn {threshold_percent}% (got {studen
 
 
 def build_course_grading_model(class_):
+    """
+    Adding "passing_grade" to graders at reading to and writing from CourseGradingModel.
+    """
     def parse_grader(json_grader):
         # manual to clear out kruft
         result = {"type": json_grader["type"],
@@ -41,13 +44,19 @@ def build_course_grading_model(class_):
 
 
 def build_course_grade(class_):
-    def _passing_grades(course_grade):
+    """
+    Modifies CourseGrade. Changes .summary, _compute_passed and
+    _compute_letter_grade to check category passing grades.
+    Edx versions of method M are saved as _default_M.
+    Also adds marks ('x' with message) at progress graph.
+    """
+    def inner_passing_grades(course_grade):
         graders = course_grade.course_data.course.grading_policy['GRADER']
         passing_grades = dict((x['type'], x['passing_grade']) for x in graders)
         return passing_grades
 
-    def compute_categories_not_passed(course_grade):
-        passing_grades = _passing_grades(course_grade)
+    def inner_categories_not_passed_messages(course_grade):
+        passing_grades = inner_passing_grades(course_grade)
 
         breakdown = course_grade.grader_result['section_breakdown']
         results = dict((x['category'], x['percent']) for x in breakdown)
@@ -69,18 +78,18 @@ def build_course_grade(class_):
                 ))
         return messages
 
-    def switch_to_default(course_grade):
+    def inner_switch_to_default(course_grade):
         course_id = course_grade.course_data.course.id
         result = not NpoedGradingFeatures.is_passing_grade_enabled(course_id)
         return result
 
     def _compute_passed(self, grade_cutoffs, percent):
-        if switch_to_default(self):
+        if inner_switch_to_default(self):
             return self._default_compute_passed(grade_cutoffs, percent)
         nonzero_cutoffs = [cutoff for cutoff in grade_cutoffs.values() if cutoff > 0]
         success_cutoff = min(nonzero_cutoffs) if nonzero_cutoffs else None
         percent_passed = success_cutoff and percent >= success_cutoff
-        category_not_passed_messages = compute_categories_not_passed(self)
+        category_not_passed_messages = inner_categories_not_passed_messages(self)
         CoursePassingGradeUserStatus.set_passing_grade_status(
             user=self.user,
             course_key=self.course_data.course.id,
@@ -93,10 +102,10 @@ def build_course_grade(class_):
         summary = self._default_summary
         if self.passed:
             return summary
-        if switch_to_default(self):
+        if inner_switch_to_default(self):
             return summary
 
-        passing_grades = _passing_grades(self)
+        passing_grades = inner_passing_grades(self)
 
         breakdown = self.grader_result['section_breakdown']
         results = dict((x['category'], x['percent']) for x in breakdown)
@@ -119,7 +128,7 @@ def build_course_grade(class_):
         return summary
 
     def _compute_letter_grade(self, grade_cutoffs, percent):
-        if switch_to_default(self):
+        if inner_switch_to_default(self):
             return self._default__compute_letter_rade(grade_cutoffs, percent)
         letter_grade = None
         if not self.passed:
@@ -146,23 +155,43 @@ def build_course_grade(class_):
 
 
 def build_is_course_passed(func):
+    """
+    Checks if course passed.
+    If grade_summary is given, next hack is used:
+    grade_summary is modified by build_course_grade in such a way that
+    failed_pass_messages are shown at the graph. So we try to get already
+    calculated error messages from there.
+    If student is given we try to get info from db.
+    Otherwise consider that passing_grades are met, but actually there is no
+    such calls of is_course_passed in edx currently.
+    """
     @wraps(func)
     def is_course_passed(course, grade_summary=None, student=None, request=None):
-        breakdown = grade_summary['section_breakdown']
+        course_key = course.id
         failed_pass_grading = []
-        for section in breakdown:
-            is_averaged_result = section.get('prominent', False)
-            if is_averaged_result and 'mark' in section:
-                if section['mark'].get('detail',None):
-                    failed_pass_grading.append(section['mark']['detail'])
+        if grade_summary:
+            breakdown = grade_summary['section_breakdown']
+            failed_pass_grading = []
+            for section in breakdown:
+                is_averaged_result = section.get('prominent', False)
+                if is_averaged_result and 'mark' in section:
+                    if section['mark'].get('detail',None):
+                        failed_pass_grading.append(section['mark']['detail'])
+        elif student:
+            if NpoedGradingFeatures.is_passing_grade_enabled(course_key):
+                failed_pass_grading = CoursePassingGradeUserStatus.get_passing_grade_status(course_key, student)
 
-        return bool(failed_pass_grading) and func(course, grade_summary, student, request)
+        is_category_grade_passed = not(failed_pass_grading)
+        return is_category_grade_passed and func(course, grade_summary, student, request)
 
     return is_course_passed
 
 
 def build__credit_course_requirements(func):
-
+    """
+    Adds unmet passing grade to the progress page.
+    Messages are shown at the page as unmet credit requirements.
+    """
     @wraps(func)
     def _credit_course_requirements(course_key, student):
         credit_requirements = func(course_key, student)
@@ -203,6 +232,10 @@ replaced = {
 
 
 def enable_passing_grade(class_):
+    """
+    This decorator should be applied to the edx
+    classes/functions that are mentioned as keys in 'replaced'.
+    """
     if not settings.FEATURES.get("ENABLE_PASSING_GRADE", False):
         return class_
     name = class_.__name__

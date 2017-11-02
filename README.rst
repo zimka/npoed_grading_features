@@ -1,36 +1,65 @@
 Description
 -----------
-This package provides new way of grading for OpenEdx. It was tested on Ficus release `"open-release/ficus.2"
+This package provides two features grading for OpenEdx: passing_grade and vertical_grading.
+
+Passing_grade feature allows to specify in studio minimal percent that should be earned
+for each assignment category. If these requirements are not met, course is considered as
+not passed even if overall percent is high enough. Messages about failed categories are shown
+to student at the progress page.
+
+Vertical grading adds new way of grading: scores are given for units, and scores for problem are used
+only to compute fraction of unit max score that student have earned.
+E.g, unit has max score 5 and consists of Problem1(1 point) and Problem2(2 points). If student
+passed first one and failed the last one, his would earn for this unit 5*(1/(2+1)) = 1.66 points.
+
+It was tested on Ficus release `"open-release/ficus.2"
 <https://github.com/edx/edx-platform/tree/open-release/ficus.2>`_
 
-Installation
-------------
+Vertical Grading Feature Installation
+-------------------------------------
 
-1. Install this package and enable feature both in lms and cms:
+* coming soon
 
-::
+Passing Grade Feature Installation
+-------------------------------------
+1. Install this package, add it into the INSTALLED_APPS and run migrations if it is not done yet.
 
-  python -m pip install -e git+https://github.com/zimka/vertical_grading.git#egg=vertical-grading
-  FEATURES["ENABLE_VERTICAL_GRADING"] = True
+   ::
 
-2. Add mixins:
+     python -m pip install -e git+https://github.com/zimka/vertical_grading.git#egg=vertical-grading
+     python manage.py lms migrate npoed_grading_features --settings=YOUR_SETTINGS
 
-  - VerticalGradingSubsectionMixin to lms.djangoapps.grade.new.subsection_grade.py:SubsectionGrade
-  - VerticalGradingZeroSubsectionMixin  to lms.djangoapps.grade.new.subsection_grade.py:ZeroSubsectionGrade
-  - VerticalGradingBlockMixin to common.lib.xmodule.xmodule.vertical_block.py:VerticalBlock
+2. Apply decorator 'enable_passing_grade' to the next classes/functions
 
-::
-    from vertical_grading import VerticalGradingBlockMixin
-    ...
-    class VerticalBlock(VerticalGradingBlockMixin, ...):
+  *  cms.djangoapps.models.settings.course_grading.py: CourseGradingModel
+
+  *  lms.djangoapps.grade.new.course_grade.py: CourseGrade
+
+  *  lms.djangoapps.courseware.views.py: is_course_passed
+
+  *  lms.djangoapps.courseware.views.py: _credit_course_requirements
 
 
-3. Apply decorator vertical_grading_xblock_info to cms.djangoapps.contentstore.item.py:create_xblock_info
+  Example:
+  ::
 
-4. Put static files from static folder:
+     ...
+     from npoed_grading_features import enable_passing_grade
 
-  - xblock_info.js int cms.static.js.models
-  - course_outline_modals.js into cms.static.js.views.modals
-  - course_outline.html into cms.templates
-  - course-outline.underscore into cms.templates.js
-  - weight-editor.underscore into cms.templates.js
+     @enable_passing_grade
+     def _credit_course_requirements
+     ...
+
+4. Copy static from static/passing_grade/:
+
+   * cms.static.js.views.settings.grader.js
+   * cms.templates.js.course_grade_policy.underscore
+
+5. Enable feature in settings
+
+  ::
+
+    FEATURES["ENABLE_PASSING_GRADE"] = True
+
+
+6. At the admin dashboard find NpoedGradingFeatures and add desired course with "Passing Grade" flag on.
