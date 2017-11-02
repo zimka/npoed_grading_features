@@ -1,8 +1,10 @@
-from django.conf import settings
-from .models import NpoedGradingFeatures
 from functools import wraps
-from xmodule.modulestore.django import modulestore
-_ = lambda text: text
+from django.conf import settings
+from django.utils.translation import ugettext_lazy as _
+
+from .models import NpoedGradingFeatures, CoursePassingGradeUserStatus
+
+NOT_PASSED_MESSAGE_TEMPLATE = _("You must earn {threshold_percent}% (got {student_percent}%) for {category}.")
 
 
 def build_course_grading_model(class_):
@@ -44,7 +46,7 @@ def build_course_grade(class_):
         passing_grades = dict((x['type'], x['passing_grade']) for x in graders)
         return passing_grades
 
-    def _compute_passed_by_category(course_grade):
+    def compute_categories_not_passed(course_grade):
         passing_grades = _passing_grades(course_grade)
 
         breakdown = course_grade.grader_result['section_breakdown']
@@ -54,8 +56,18 @@ def build_course_grade(class_):
         if not keys_match:
             # Error handling
             return True
-        is_passed = all([results[category] > passing_grades[category] for category in results.keys()])
-        return is_passed
+
+        messages = []
+        for category in results.keys():
+            if results[category] < passing_grades[category]:
+                student_percent = int(round(results[category]*100))
+                threshold_percent = int(round(passing_grades[category]*100))
+                messages.append(NOT_PASSED_MESSAGE_TEMPLATE.format(
+                    category=category,
+                    student_percent=student_percent,
+                    threshold_percent=threshold_percent
+                ))
+        return messages
 
     def switch_to_default(course_grade):
         course_id = course_grade.course_data.course.id
@@ -68,7 +80,13 @@ def build_course_grade(class_):
         nonzero_cutoffs = [cutoff for cutoff in grade_cutoffs.values() if cutoff > 0]
         success_cutoff = min(nonzero_cutoffs) if nonzero_cutoffs else None
         percent_passed = success_cutoff and percent >= success_cutoff
-        category_passed = _compute_passed_by_category(self)
+        category_not_passed_messages = compute_categories_not_passed(self)
+        CoursePassingGradeUserStatus.set_passing_grade_status(
+            user=self.user,
+            course_key=self.course_data.course.id,
+            fail_status_messages=category_not_passed_messages
+        )
+        category_passed = len(category_not_passed_messages) == 0
         return percent_passed and category_passed
 
     def summary(self):
@@ -87,9 +105,16 @@ def build_course_grade(class_):
             is_averaged_result = section.get('prominent', False)
             is_not_passed = results[category] < passing_grades[category]
             if is_averaged_result and is_not_passed:
-                message = u'Not passed. You must earn {percent} percent for this category to pass.'.format(
-                    percent=100*passing_grades[category]
+                student_percent = int(round(results[category]*100))
+                threshold_percent = int(round(passing_grades[category]*100))
+                message = NOT_PASSED_MESSAGE_TEMPLATE.format(
+                    category=category,
+                    student_percent=student_percent,
+                    threshold_percent=threshold_percent
                 )
+                #message = u'Not passed. You must earn {percent} percent for this category to pass.'.format(
+                #    percent=100*passing_grades[category]
+                #)
                 section['mark'] = {'detail': message}
         return summary
 
@@ -120,43 +145,61 @@ def build_course_grade(class_):
     return class_
 
 
-def _get_passing_grade_requirements(course_key):
-    course = modulestore().get_course(course_key)
-    graders = course.grading_policy['GRADER']
-    passing_grades = dict((x['type'], x['passing_grade']) for x in graders)
-    return [
-        {
-            "namespace": "passing_grade",
-            "name": "{category} percent".format(category=category),
-            "display_name": "Minimum {category} Percent".format(category=category),
-            "criteria": {
-                "min_category_percent": passing_grades[category]
-            },
-        }
-        for category in passing_grades
-    ]
-
-def build__get_course_credit_requirements(func):
+def build_is_course_passed(func):
     @wraps(func)
-    def wrapped(course_key):
-        credit_requirements = func(course_key)
-        grading_features = NpoedGradingFeatures.get(course_key)
-        if not grading_features.passing_grade:
-            return credit_requirements
-        if grading_features.silence_minimal_grade_credit_requirement:
-            credit_requirements = [x for x in credit_requirements if x['name'] != 'grade']
-        passing_grade_requirements = _get_passing_grade_requirements(course_key)
-        credit_requirements += passing_grade_requirements
-        return credit_requirements
-    return wrapped
+    def is_course_passed(course, grade_summary=None, student=None, request=None):
+        breakdown = grade_summary['section_breakdown']
+        failed_pass_grading = []
+        for section in breakdown:
+            is_averaged_result = section.get('prominent', False)
+            if is_averaged_result and 'mark' in section:
+                if section['mark'].get('detail',None):
+                    failed_pass_grading.append(section['mark']['detail'])
 
+        return bool(failed_pass_grading) and func(course, grade_summary, student, request)
+
+    return is_course_passed
+
+
+def build__credit_course_requirements(func):
+
+    @wraps(func)
+    def _credit_course_requirements(course_key, student):
+        credit_requirements = func(course_key, student)
+        if not NpoedGradingFeatures.is_passing_grade_enabled(course_key):
+            return credit_requirements
+        failed_categories = CoursePassingGradeUserStatus.get_passing_grade_status(course_key, student)
+        if not failed_categories:
+            return credit_requirements
+
+        passing_grade_requirements = [{
+            "namespace": "passing_grade",
+            "name": "",
+            "display_name": x,
+            "criteria": "",
+            "reason": "",
+            "status": "",
+            "status_date": None,
+            "order": None,
+        } for x in failed_categories]
+
+        if credit_requirements is None:
+            credit_requirements = {
+                'eligibility_status': 'failed',
+                'requirements': passing_grade_requirements,
+            }
+        else:
+            credit_requirements['requirements'].extend(passing_grade_requirements)
+            credit_requirements['eligibility_status'] = 'failed'
+        return credit_requirements
+    return _credit_course_requirements
 
 replaced = {
     "CourseGradingModel": build_course_grading_model,
     "CourseGrade": build_course_grade,
-    "_get_course_credit_requirements": build__get_course_credit_requirements,
+    "is_course_passed": build_is_course_passed,
+    "_credit_course_requirements": build__credit_course_requirements
 }
-
 
 
 def enable_passing_grade(class_):

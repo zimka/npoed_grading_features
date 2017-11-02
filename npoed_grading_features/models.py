@@ -1,5 +1,7 @@
 from django.db import models
+from django.contrib.auth.models import User
 from opaque_keys.edx.keys import CourseKey
+import json
 
 _FEATURES = (
     "vertical_grading",
@@ -19,6 +21,7 @@ class NpoedGradingFeatures(models.Model):
         verbose_name="This fields fixes auto-generation of minimal_grade requirement." \
                      "If you want to use this credit requirement, you must turn it OFF."
     )
+
     @classmethod
     def is_vertical_grading_enabled(cls, course_id):
         return cls._is_feature_enabled(course_id, 'vertical_grading')
@@ -72,3 +75,39 @@ class NpoedGradingFeatures(models.Model):
         grading_features, created = cls.objects.get_or_create(course_id=cid)
         setattr(grading_features, feature, state)
         grading_features.save()
+
+
+class CoursePassingGradeUserStatus(models.Model):
+    course_id = models.CharField(max_length=255)
+    user = models.ForeignKey(User)
+    fail_status_messages = models.TextField(
+        verbose_name="Message that specifies what user has to do to pass"
+    )
+
+    class Meta:
+        unique_together = ("course_id", "user")
+
+    @classmethod
+    def get_passing_grade_status(cls, course_key, user):
+        course_id = str(course_key)
+        if not NpoedGradingFeatures.is_passing_grade_enabled(course_id):
+            raise ValueError("Passing grade is not enabled for course {}.".format(
+                course_id
+            ))
+        try:
+            row = cls.objects.get(course_id=course_id, user=user)
+            messages = json.loads(row.fail_status_messages)
+        except cls.DoesNotExist:
+            messages = tuple("You progress is not processed yet")
+        return messages
+
+    @classmethod
+    def set_passing_grade_status(cls, course_key, user, fail_status_messages):
+        course_id = str(course_key)
+        if not NpoedGradingFeatures.is_passing_grade_enabled(course_id):
+            raise ValueError("Passing grade is not enabled for course {}.".format(
+                course_id
+            ))
+        row, created = cls.objects.get_or_create(course_id=course_id, user=user)
+        row.fail_status_messages = json.dumps(fail_status_messages)
+        row.save()
