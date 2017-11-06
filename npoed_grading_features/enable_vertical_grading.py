@@ -30,10 +30,10 @@ def build_subsection_grade(class_):
             self.locations_to_scores[block_key] = vertical_pseudo_problem_score
 
     def _compute_block_score(self, *args, **kwargs):
-        if feature_enabled():
+        if feature_enabled(self.location.course_key):
             return self._vertical_compute_block_score(*args, **kwargs)
         else:
-            return self._problem_compute_block_score(self, *args, **kwargs)
+            return self._problem_compute_block_score(*args, **kwargs)
 
     class_._problem_compute_block_score = class_._compute_block_score
     class_._vertical_compute_block_score = _vertical_compute_block_score
@@ -68,7 +68,7 @@ def build_zero_subsection_grade(class_):
         return locations
 
     def locations_to_scores(self):
-        if feature_enabled():
+        if feature_enabled(self.location.course_key):
             return self._vertical_locations_to_scores
         else:
             return self._old_locations_to_scores
@@ -95,19 +95,22 @@ def build_create_xblock_info(func):
     This is decorator for cms.djangoapps.contentstore.item.py:create_xblock_info
     It adds vertical block weight to the available for rendering info
     """
-    if not feature_enabled():
-        return func
 
     @wraps(func)
     def wrapped(*args, **kwargs):
         xblock = kwargs.get('xblock', False) or args[0]
         xblock_info = func(*args, **kwargs)
+        if not feature_enabled(xblock.location.course_key):
+            return xblock_info
         if xblock_info.get("category", False) == 'vertical':
             weight = getattr(xblock, 'weight', 0)
             xblock_info['weight'] = weight
+            xblock_info['vertical_grading'] = True
             parent_xblock = kwargs.get('parent_xblock', None)
             if parent_xblock:
                 xblock_info['format'] = parent_xblock.format
+        if xblock_info.get("category", False) == 'sequential':
+            xblock_info['vertical_grading'] = True
         return xblock_info
 
     return wrapped
@@ -116,7 +119,16 @@ def build_create_xblock_info(func):
 def build_assignment_format_grader(class_):
     class_.problem_grade = class_.grade
 
+    def get_course_id_from_grade_sheet(grade_sheet):
+        for category_dict in grade_sheet.values():
+            for key in category_dict:
+                return key.course_key
+        return None
+
     def grade(self, grade_sheet, generate_random_scores=False):
+        course_key = get_course_id_from_grade_sheet(grade_sheet)
+        if not feature_enabled(course_key):
+            return self.problem_grade(grade_sheet, generate_random_scores)
         drop_count = self.drop_count
         self.drop_count = 0
         subsection_grades = grade_sheet.get(self.type, {}).values()

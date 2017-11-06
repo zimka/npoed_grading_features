@@ -1,11 +1,11 @@
 from functools import wraps
 
 from django.conf import settings
+from .models import NpoedGradingFeatures
 
 
-
-def feature_enabled():
-    return settings.FEATURES.get("ENABLE_VERTICAL_GRADING")
+def feature_enabled(course_id):
+    return settings.FEATURES.get("ENABLE_VERTICAL_GRADING") and NpoedGradingFeatures.is_vertical_grading_enabled(course_id)
 
 VERTICAL_CATEGORY = 'vertical'
 
