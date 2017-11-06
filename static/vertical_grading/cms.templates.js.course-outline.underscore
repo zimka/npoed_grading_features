@@ -191,6 +191,11 @@ if (is_proctored_exam) {
             <% if (xblockInfo.get('is_time_limited')) { %>
                 <div class="status-timed-proctored-exam">
                     <p>
+                    <% if (!(xblockInfo.get('vertical_grading'))) { %>
+                        <span class="sr status-grading-label"> <%- gettext('Graded as:') %> </span>
+                        <span class="icon fa fa-check" aria-hidden="true"></span>
+                        <span class="status-grading-value"> <%- gradingType %> </span>
+                    <% } %>
                         <span class="sr status-proctored-exam-label"> <%- exam_value %> </span>
                         <span class="status-proctored-exam-value"> <%- exam_value %> </span>
                         <% if (xblockInfo.get('due_date')) { %>
@@ -201,6 +206,11 @@ if (is_proctored_exam) {
             <% } else if (xblockInfo.get('due_date') || xblockInfo.get('graded')) { %>
                 <div class="status-grading">
                     <p>
+                    <% if (!(xblockInfo.get('vertical_grading'))) { %>
+                        <span class="sr status-grading-label"> <%- gettext('Graded as:') %> </span>
+                        <span class="icon fa fa-check" aria-hidden="true"></span>
+                        <span class="status-grading-value"> <%- gradingType %> </span>
+                    <% } %>
                         <% if (xblockInfo.get('due_date') && !course.get('self_paced')) { %>
                             <span class="status-grading-date"> <%- gettext('Due:') %> <%- xblockInfo.get('due_date') %> </span>
                         <% } %>
@@ -220,7 +230,7 @@ if (is_proctored_exam) {
                     <% } %>
                 </p>
             </div>
-        <% } else { %>
+        <% } else if (xblockInfo.get('vertical_grading')) { %>
             <% if (xblockInfo.get('due_date') || xblockInfo.get('graded')) { %>
             <%
                 var weight = xblockInfo.get('weight');

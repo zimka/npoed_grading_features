@@ -6,7 +6,7 @@
                 <% if (!(xblockInfo.get('format'))) {%>
                     disabled
                 <% } else { %>
-                    value="<%= xblockInfo.get('weight') %>"
+                value="<%= xblockInfo.get('weight') %>"
                 <% } %>
             />
         </li>

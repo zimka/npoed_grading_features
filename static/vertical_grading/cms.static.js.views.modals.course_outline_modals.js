@@ -799,8 +799,12 @@ define(['jquery', 'backbone', 'underscore', 'gettext', 'js/views/baseview',
                 editors: []
             };
             if (xblockInfo.isVertical()) {
-                editors = [DueDateEditor, WeightEditor,StaffLockEditor];
-                xblockInfo['format'] = options.parentInfo.get('format');
+                if('vertical_grading' in xblockInfo.attributes){
+                    editors = [DueDateEditor, WeightEditor,StaffLockEditor];
+                } else{
+                    editors = [StaffLockEditor];
+                }
+                    xblockInfo['format'] = options.parentInfo.get('format');
             } else {
                 tabs = [
                     {
@@ -818,7 +822,11 @@ define(['jquery', 'backbone', 'underscore', 'gettext', 'js/views/baseview',
                     tabs[0].editors = [ReleaseDateEditor];
                     tabs[1].editors = [StaffLockEditor];
                 } else if (xblockInfo.isSequential()) {
-                    tabs[0].editors = [ReleaseDateEditor, GradingEditor];
+                    if('vertical_grading' in xblockInfo.attributes) {
+                        tabs[0].editors = [ReleaseDateEditor, GradingEditor];
+                    } else {
+                        tabs[0].editors = [ReleaseDateEditor, GradingEditor, DueDateEditor];
+                    }
                     tabs[1].editors = [ContentVisibilityEditor, ShowCorrectnessEditor];
 
                     if (options.enable_proctored_exams || options.enable_timed_exams) {
