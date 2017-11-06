@@ -18,11 +18,53 @@ It was tested on Ficus release `"open-release/ficus.2"
 Vertical Grading Feature Installation
 -------------------------------------
 
-* coming soon
+1. Install this package, add it into the INSTALLED_APPS and run migrations if it is not done yet.
+
+   ::
+
+     python -m pip install -e git+https://github.com/zimka/vertical_grading.git#egg=vertical-grading
+     python manage.py lms migrate npoed_grading_features --settings=YOUR_SETTINGS
+
+2. Apply decorator 'enable_vertical_grading' to the next classes/functions
+
+    * lms.djangoapps.grades.new.subsection_grade.py: SubsectionGrade
+    * lms.djangoapps.grades.new.subsection_grade.py: ZeroSubsectionGrade
+    * common.lib.xmodule.xmodule.graders.py: AssignmentFormatGrader
+    * common.lib.xmodule.xmodule.vertical_block.py: VerticalBlock
+    * cms.djangoapps.contentstore.views.item.py: create_xblock_info
+
+
+  Example:
+  ::
+
+     ...
+     from npoed_grading_features import enable_vertical_grading
+
+     @enable_vertical_grading
+     class SubsectionGrade(SubsectionGradeBase):
+     ...
+
+4. Copy static from static/vertical_grading/:
+
+   * cms.static.js.views.modals.course_outline_modals.js
+   * cms.templates.course_outline.html
+   * cms.templates.js.course-outline.underscore
+   * cms.templates.js.weight-editor.underscore
+
+
+5. Enable feature in settings
+
+  ::
+
+    FEATURES["ENABLE_VERTICAL_GRADING"] = True
+
+
+6. At the admin dashboard find NpoedGradingFeatures and add desired course with "Passing Grade" flag on.
+
 
 Passing Grade Feature Installation
 -------------------------------------
-1. Install this package, add it into the INSTALLED_APPS and run migrations if it is not done yet.
+1. Install this package, add it into the INSTALLED_APPS and run migrations if it is not done yet (same to vertical grading).
 
    ::
 
@@ -32,11 +74,8 @@ Passing Grade Feature Installation
 2. Apply decorator 'enable_passing_grade' to the next classes/functions
 
   *  cms.djangoapps.models.settings.course_grading.py: CourseGradingModel
-
   *  lms.djangoapps.grade.new.course_grade.py: CourseGrade
-
   *  lms.djangoapps.courseware.views.py: is_course_passed
-
   *  lms.djangoapps.courseware.views.py: _credit_course_requirements
 
 
