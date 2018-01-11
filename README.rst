@@ -1,8 +1,8 @@
 Description
 -----------
-This package provides two features grading for OpenEdx: passing_grade and vertical_grading.
+This package provides two custom grading features for OpenEdx: "passing grade" and "vertical grading".
 
-Passing_grade feature allows to specify in studio minimal percent that should be earned
+Passing grade feature allows to specify in studio minimal percent that should be earned
 for each assignment category. If these requirements are not met, course is considered as
 not passed even if overall percent is high enough. Messages about failed categories are shown
 to student at the progress page.
@@ -44,22 +44,27 @@ Vertical Grading Feature Installation
      class SubsectionGrade(SubsectionGradeBase):
      ...
 
-4. Copy static from static/vertical_grading/:
-
-   * cms.static.js.views.modals.course_outline_modals.js
-   * cms.templates.course_outline.html
-   * cms.templates.js.course-outline.underscore
-   * cms.templates.js.weight-editor.underscore
-
-
-5. Enable feature in settings
+3. Enable feature in lms and cms settings
 
   ::
 
     FEATURES["ENABLE_VERTICAL_GRADING"] = True
 
 
-6. At the admin dashboard find NpoedGradingFeatures and add desired course with "Passing Grade" flag on.
+4. Run django command
+
+  ::
+
+    python manage.py lms load_static_grading_feature vertical_grading --settings=SETTINGS
+
+
+  Or copy static files manually from static/vertical_grading
+
+
+6. At the admin dashboard find NpoedGradingFeatures and add desired course with "Vertical Grading" flag on.
+
+
+7. (Optional) Update staticfiles
 
 
 Passing Grade Feature Installation
@@ -68,7 +73,7 @@ Passing Grade Feature Installation
 
    ::
 
-     python -m pip install -e git+https://github.com/zimka/vertical_grading.git#egg=vertical-grading
+     python -m pip install -e git+https://github.com/zimka/npoed_grading_features.git#egg=npoed-grading-features
      python manage.py lms migrate npoed_grading_features --settings=YOUR_SETTINGS
 
 2. Apply decorator 'enable_passing_grade' to the next classes/functions
@@ -89,16 +94,24 @@ Passing Grade Feature Installation
      def _credit_course_requirements
      ...
 
-4. Copy static from static/passing_grade/:
 
-   * cms.static.js.views.settings.grader.js
-   * cms.templates.js.course_grade_policy.underscore
-
-5. Enable feature in settings
+4. Enable feature in lms and cms settings
 
   ::
 
     FEATURES["ENABLE_PASSING_GRADE"] = True
 
+  Or copy static files manually from static/vertical_grading
+
+
+5. Run django command
+
+  ::
+
+    python manage.py lms load_static_grading_feature passing_grade --settings=SETTINGS
+
 
 6. At the admin dashboard find NpoedGradingFeatures and add desired course with "Passing Grade" flag on.
+
+
+7. (Optional) Update staticfiles
