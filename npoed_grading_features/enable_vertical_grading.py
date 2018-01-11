@@ -27,7 +27,7 @@ def build_subsection_grade(class_):
             persisted_block
         )
         if vertical_pseudo_problem_score:
-            self.locations_to_scores[block_key] = vertical_pseudo_problem_score
+            self.problem_scores[block_key] = vertical_pseudo_problem_score
 
     def _compute_block_score(self, *args, **kwargs):
         if feature_enabled(self.location.course_key):
@@ -43,9 +43,9 @@ def build_subsection_grade(class_):
 
 def build_zero_subsection_grade(class_):
 
-    def _vertical_locations_to_scores(self):
+    def _vertical_problem_scores(self):
         """
-        Overrides the locations_to_scores member variable in order
+        Overrides the problem_scores member variable in order
         to return empty scores for all scorable problems in the
         course.
         """
@@ -67,15 +67,15 @@ def build_zero_subsection_grade(class_):
                 locations[block_key] = vertical_score
         return locations
 
-    def locations_to_scores(self):
+    def problem_scores(self):
         if feature_enabled(self.location.course_key):
-            return self._vertical_locations_to_scores
+            return self._vertical_problem_scores
         else:
-            return self._old_locations_to_scores
+            return self._old_problem_scores
 
-    class_._old_locations_to_scores = class_.locations_to_scores
-    class_._vertical_locations_to_scores = lazy(_vertical_locations_to_scores)
-    class_.locations_to_scores = property(locations_to_scores)
+    class_._old_problem_scores= class_.problem_scores
+    class_._vertical_problem_scores = lazy(_vertical_problem_scores)
+    class_.problem_scores = property(problem_scores)
     return class_
 
 

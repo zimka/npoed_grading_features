@@ -50,7 +50,8 @@ def get_vertical_score(
     vertical_earned = sum(score.earned for score in children_scores)
     weighted_earned = vertical_weight * float(vertical_earned) / vertical_possible
     weighted_possible = vertical_weight
-    vertical_attempted = any(score.attempted for score in children_scores)
+    inner_first_attempted = list(score.first_attempted for score in children_scores)
+    vertical_attempted = max(inner_first_attempted) if inner_first_attempted else None
     vertical_graded = any(score.graded for score in children_scores)
     vertical_pseudo_problem = ProblemScore(
         raw_earned=vertical_earned,
@@ -59,7 +60,7 @@ def get_vertical_score(
         weighted_possible=weighted_possible,
         weight=vertical_weight,
         graded=vertical_graded,
-        attempted=vertical_attempted
+        first_attempted=vertical_attempted
     )
     return vertical_pseudo_problem
 
@@ -69,7 +70,7 @@ def drop_minimal_vertical_from_subsection_grades(subsection_grades):
     max_lost_points_index = (-1, "None")
 
     for num, grade in enumerate(subsection_grades):
-        for block_key, problem_score in grade.locations_to_scores.items():
+        for block_key, problem_score in grade.problem_scores.items():
             lost_points = problem_score.possible - problem_score.earned
             if lost_points > max_lost_points:
                 max_lost_points = lost_points
@@ -77,7 +78,7 @@ def drop_minimal_vertical_from_subsection_grades(subsection_grades):
     if max_lost_points == -1:
         return subsection_grades
     modified_grade = subsection_grades[max_lost_points_index[0]]
-    subtracted_score = modified_grade.locations_to_scores.pop(max_lost_points_index[1])
+    subtracted_score = modified_grade.problem_scores.pop(max_lost_points_index[1])
     modified_grade.graded_total.earned -= subtracted_score.earned
     modified_grade.graded_total.possible -= subtracted_score.possible
 

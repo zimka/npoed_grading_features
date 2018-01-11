@@ -85,7 +85,7 @@ def build_course_grade(class_):
 
     def _compute_passed(self, grade_cutoffs, percent):
         if inner_switch_to_default(self):
-            return self._default_compute_passed(grade_cutoffs, percent)
+            return default__compute_passed(grade_cutoffs, percent)
         nonzero_cutoffs = [cutoff for cutoff in grade_cutoffs.values() if cutoff > 0]
         success_cutoff = min(nonzero_cutoffs) if nonzero_cutoffs else None
         percent_passed = success_cutoff and percent >= success_cutoff
@@ -129,7 +129,7 @@ def build_course_grade(class_):
 
     def _compute_letter_grade(self, grade_cutoffs, percent):
         if inner_switch_to_default(self):
-            return self._default__compute_letter_rade(grade_cutoffs, percent)
+            return default__compute_letter_grade(grade_cutoffs, percent)
         letter_grade = None
         if not self.passed:
             percent = 0
@@ -142,10 +142,10 @@ def build_course_grade(class_):
 
         return letter_grade
 
-    class_._default__compute_passed = class_._compute_passed
+    default__compute_passed = class_._compute_passed
     class_._compute_passed = _compute_passed
 
-    class_._default__compute_letter_grade = class_._compute_letter_grade
+    default__compute_letter_grade = class_._compute_letter_grade
     class_._compute_letter_grade = _compute_letter_grade
 
     class_._default_summary = class_.summary
