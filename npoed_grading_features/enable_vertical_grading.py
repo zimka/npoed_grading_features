@@ -2,6 +2,7 @@ from collections import OrderedDict
 from functools import wraps
 
 from lazy import lazy
+from django.conf import settings
 
 from xblock.fields import Integer, Scope
 
@@ -142,8 +143,6 @@ def build_assignment_format_grader(class_):
     return class_
 
 
-
-
 replaced = {
     "SubsectionGrade": build_subsection_grade,
     "ZeroSubsectionGrade": build_zero_subsection_grade,
@@ -154,6 +153,8 @@ replaced = {
 
 
 def enable_vertical_grading(obj):
+    if not settings.FEATURES.get("ENABLE_VERTICAL_GRADING", False):
+        return obj
     name = obj.__name__
     if name in replaced:
         constructor = replaced.get(name)
