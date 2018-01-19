@@ -141,7 +141,34 @@ class BuildCourseMixin(object):
                 element_max.extend(current_max)
             if not element_max:
                 return None
-            return sum(element_earned) / sum(element_max)
+            return zip(element_earned, element_max)
+
+        def compute_subsection_percent(pairs):
+            if pairs:
+                return sum(x[0] for x in pairs) / sum(x[1] for x in pairs)
+
+        def drop_minimal_vertical_from_subsection_grades_mimic(tuple_of_subsection_unit_score_pairs):
+            """
+            :param tuple_of_subsection_unit_score_pairs_lists:
+                (
+                    [(1,3), (0,1), (None, None)],
+                    [(1,1, (1,10)]
+                )
+                Drops (1,10) because have lost 9 points
+            """
+            max_lost_points = -1
+            max_lost_points_index = (-1, "None")
+            for num_ss, subsection_grades in enumerate(tuple_of_subsection_unit_score_pairs):
+                for num_p, pair in enumerate(subsection_grades):
+                    if not pair[1]:
+                        continue
+                    lost_points = pair[1] - pair[0]
+                    if lost_points > max_lost_points:
+                        max_lost_points = lost_points
+                        max_lost_points_index = (num_ss, num_p)
+            if max_lost_points == -1:
+                return
+            tuple_of_subsection_unit_score_pairs[max_lost_points_index[0]].pop(max_lost_points_index[1])
 
         score_by_assignment_category = {}
         for _, section_tree in tree.iteritems():
@@ -152,19 +179,23 @@ class BuildCourseMixin(object):
                 if assignment_category not in score_by_assignment_category:
                     score_by_assignment_category[assignment_category] = []
                 subsection_score = grade_subsection(subsection_tree)
-                if subsection_score:
+                if subsection_score is not None:
                     score_by_assignment_category[assignment_category].append(subsection_score)
-
         course_score = 0
         assignment_category_meta = dict(
             ((x["type"], {"weight": x["weight"], "drop_count": x["drop_count"]})
             for x in self.course.grading_policy["GRADER"])
         )
         for assignment_category in score_by_assignment_category:
-            subsection_percents = score_by_assignment_category[assignment_category]
-            sorted(subsection_percents, key=lambda x: -1 if x is None else x)
-            start_id = assignment_category_meta[assignment_category]["drop_count"]
-            subsection_percents = subsection_percents[start_id::]
+            if enable_vertical:
+                for _ in range(int(assignment_category_meta[assignment_category]["drop_count"])):
+                    drop_minimal_vertical_from_subsection_grades_mimic(score_by_assignment_category[assignment_category])
+            subsection_percents = [compute_subsection_percent(x) for x in score_by_assignment_category[assignment_category]]
+            subsection_percents = sorted(subsection_percents, key=lambda x: -1 if x is None else x)
+            if not enable_vertical:
+                start_id = assignment_category_meta[assignment_category]["drop_count"]
+                subsection_percents = subsection_percents[start_id::]
+
             if subsection_percents:
                 weight = assignment_category_meta[assignment_category]["weight"]
                 average_score = sum(subsection_percents)/len(subsection_percents)

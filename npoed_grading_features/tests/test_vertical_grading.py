@@ -106,8 +106,8 @@ class TestExpectedGrading(ModuleStoreTestCase, BuildCourseMixin):
                 })
             }
         }
-        computed_expected_pc = self._grade_tree(tree, enable_vertical=False)
-        self.assertEqual(pc, computed_expected_pc)
+        model_calculated_pc = self._grade_tree(tree, enable_vertical=False)
+        self.assertEqual(pc, model_calculated_pc)
 
 
 @ddt.ddt
@@ -129,25 +129,7 @@ class TestCourseBuilding(ModuleStoreTestCase, BuildCourseMixin):
         super(TestCourseBuilding, self).setUp()
         self.course = CourseFactory.create()
         self.request = get_mock_request(UserFactory())
-
-        grading_policy = {
-            "GRADER": [
-                {
-                    "type": "Homework",
-                    "min_count": 1,
-                    "drop_count": 0,
-                    "short_label": "HW",
-                    "weight": 1.0,
-                },
-            ],
-            "GRADE_CUTOFFS": {
-                "Pass": 0.5,
-            },
-        }
-
-        self.course.set_grading_policy(grading_policy)
-        self.store.update_item(self.course, 0)
-        self.course = self.store.get_course(self.course.id)
+        self._update_grading_policy()
         CourseEnrollment.enroll(self.request.user, self.course.id)
 
     @ddt.data(False, True)
@@ -179,5 +161,244 @@ class TestCourseBuilding(ModuleStoreTestCase, BuildCourseMixin):
             expected_grade = 0.25
         expected_pc = round(expected_grade * 100 + 0.05) / 100
         self.assertEqual(pc, expected_pc)
-        computed_expected_pc = self._grade_tree(tree, enable_vertical)
-        self.assertEqual(pc, computed_expected_pc)
+        model_calculated_pc = self._grade_tree(tree, enable_vertical)
+        self.assertEqual(pc, model_calculated_pc)
+
+
+@ddt.ddt
+class TestVerticalGrading(ModuleStoreTestCase, BuildCourseMixin):
+    """
+    Tests different states and courses represented by tree
+    """
+
+    def setUp(self):
+        super(TestVerticalGrading, self).setUp()
+        self.course = CourseFactory.create()
+        self.request = get_mock_request(UserFactory())
+        self._update_grading_policy()
+        CourseEnrollment.enroll(self.request.user, self.course.id)
+
+    @ddt.data(True, False)
+    def test_simple(self, enable_vertical):
+        """
+        Test some simple course
+        """
+        tree = {
+            "a": {
+                "b": ("Homework", {
+                    "c": (2., {"d": (0., 1.), "e": (1., 1.)}),
+                }),
+            }
+        }
+        self._update_grading_policy()
+        self._enable_if_needed(enable_vertical)
+        self._build_from_tree(tree)
+        self._check_tree(tree, self.course)
+        pc = CourseGradeFactory().create(self.request.user, self.course).percent
+        model_calculated_pc = self._grade_tree(tree, enable_vertical)
+        self.assertEqual(pc, model_calculated_pc)
+        self.assertEqual(pc, 0.5)
+
+    @ddt.data(True, False)
+    def test_unanswered(self, enable_vertical):
+        """
+        Test that course grade at start is 0
+        """
+        tree = {
+            "a": {
+                "b": ("Homework", {
+                    "c": (2., {"d": (None, 1.), "e": (None, 1.)}),
+                }),
+            }
+        }
+        self._update_grading_policy()
+        self._enable_if_needed(enable_vertical)
+        self._build_from_tree(tree)
+        self._check_tree(tree, self.course)
+        pc = CourseGradeFactory().create(self.request.user, self.course).percent
+        model_calculated_pc = self._grade_tree(tree, enable_vertical)
+        self.assertEqual(pc, model_calculated_pc)
+        expected_pc = 0.0
+        self.assertEqual(pc, expected_pc)
+
+    @ddt.data(True, False)
+    def test_no_graded_subsections(self, enable_vertical):
+        """
+        Test that course grade where nothing is graded
+        """
+        tree = {
+            "a": {
+                "b": (None, {
+                    "c": (0., {"d": (None, 1.), "e": (None, 1.)}),
+                }),
+            }
+        }
+        self._update_grading_policy()
+        self._enable_if_needed(enable_vertical)
+        self._build_from_tree(tree)
+        self._check_tree(tree, self.course)
+        pc = CourseGradeFactory().create(self.request.user, self.course).percent
+        model_calculated_pc = self._grade_tree(tree, enable_vertical)
+        self.assertEqual(pc, model_calculated_pc)
+        self.assertEqual(pc, 0.0)
+
+    @ddt.data(True, False)
+    def test_has_zero_weights(self, enable_vertical):
+        """
+        Test that course grade at start is 0
+        """
+        tree = {
+            "a": {
+                "b": ("Homework", {
+                    "c": (1., {"d": (0., 1.), "e": (0., 1.)}),
+                    "f": (0., {"g": (0., 1.), "h": (1., 1.)}),
+                    "i": (4., {"j": (1., 1.), "k": (1., 1.)}),
+
+                }),
+            }
+        }
+        self._update_grading_policy()
+        self._enable_if_needed(enable_vertical)
+        self._build_from_tree(tree)
+        self._check_tree(tree, self.course)
+        pc = CourseGradeFactory().create(self.request.user, self.course).percent
+        model_calculated_pc = self._grade_tree(tree, enable_vertical)
+        self.assertEqual(pc, model_calculated_pc)
+        expected_pc = 0.8 if enable_vertical else 0.5
+        self.assertEqual(pc, expected_pc)
+
+    @ddt.data(True, False)
+    def test_several_subsections(self, enable_vertical):
+        """
+        Test with several subsections, both graded and not
+        """
+        tree = {
+            "a": {
+                "b": ("Homework", {
+                    "c": (1., {"d": (0., 1.), "e": (0., 1.)}),
+
+                }),
+                "f": ("", {
+                    "g": (1., {"h": (1., 1.), "i": (1., 1.)}),
+                }),
+                "j": ("Homework", {
+                    "l": (1., {"m":(1,1)}),
+                    "n": (0., {"o":(1,1)})
+                })
+            }
+        }
+        self._update_grading_policy()
+        self._enable_if_needed(enable_vertical)
+        self._build_from_tree(tree)
+        self._check_tree(tree, self.course)
+
+        pc = CourseGradeFactory().create(self.request.user, self.course).percent
+        model_calculated_pc = self._grade_tree(tree, enable_vertical)
+        self.assertEqual(pc, model_calculated_pc)
+
+        expected_pc = 0.5
+        self.assertEqual(pc, expected_pc)
+
+    @ddt.data(True, False)
+    def test_several_assignment_categories(self, enable_vertical):
+        """
+        Test with two assignments: Homework and Exam
+        """
+        #
+        tree = {
+            "a": {
+                "b": ("Homework", {
+                    "c": (1., {"d": (0., 1.), "e": (1., 1.)}),
+                    "c2":(0., {"d2":(0., 1.), "e2":(1., 1.)}),
+                }),
+                "f": ("Exam", {
+                    "g": (1., {"h": (1., 1.), "i": (1., 1.)}),
+                    "j": (3., {"k": (0., 1.), "l": (1., 1.)})
+                }),
+            }
+        }
+        grading_policy = {
+            "GRADER": [
+                {
+                    "type": "Homework",
+                    "min_count": 1,
+                    "drop_count": 0,
+                    "short_label": "HW",
+                    "weight": 0.4,
+                },
+                {
+                    "type": "Exam",
+                    "min_count": 1,
+                    "drop_count": 0,
+                    "short_label": "Exam",
+                    "weight": 0.6,
+                },
+            ],
+            "GRADE_CUTOFFS": {
+                "Pass": 0.5,
+            },
+        }
+        self._update_grading_policy(grading_policy)
+        self._enable_if_needed(enable_vertical)
+        self._build_from_tree(tree)
+        self._check_tree(tree, self.course)
+
+        pc = CourseGradeFactory().create(self.request.user, self.course).percent
+        model_calculated_pc = self._grade_tree(tree, enable_vertical)
+        self.assertEqual(pc, model_calculated_pc)
+
+        expected_pc_vertical = 0.4*((1.*.5 + 0.*.5)/1) + 0.6*((1.*1 + .5*3)/4)
+        expected_pc_non_vertical = 0.4*.5 + 0.6*0.75
+        expected_pc = expected_pc_vertical if enable_vertical else expected_pc_non_vertical
+        self.assertEqual(pc, round(expected_pc + 0.05/100, 2)) # edx grade rounding, fails otherwise
+
+    @ddt.data(True, False)
+    def test_droppable_subsections(self, enable_vertical):
+        """
+        Tests subsection drop with low score works
+        """
+        tree = {
+            "a": {
+                "b1": ("Homework", {  # NW 0.5; W: 0.8
+                    "c1": (1., {"d1": (0., 1.), "e1": (0., 1.)}), # W:0/1
+                    "f1": (4., {"g1": (1., 1.), "h1": (1., 1.)}), # W:4/4
+                }),
+                "b2": ("Homework", { # NW 0.75: W: 1
+                    "c2": (1., {"d2": (1., 1.), "e2": (1., 1.)}), # W:1/1
+                    "f2": (4., {"g2": (1., 1.), "h2": (0., 1.)}), # W:2/4 -
+                }),
+                "b3": ("Homework", { # NW 0.25; W: 0.5
+                    "c3": (1., {"d3": (0., 1.), "e3": (1., 1.)}), # W:0.5/1
+                    "f3": (4., {"g3": (0., 1.), "h3": (0., 1.)}), # W:0./4 -
+                }),
+            }
+        }
+        DROP_COUNT = 2
+        grading_policy = {
+            "GRADER": [
+                {
+                    "type": "Homework",
+                    "min_count": 1,
+                    "drop_count": DROP_COUNT,
+                    "short_label": "HW",
+                    "weight": 1.,
+                },
+            ],
+            "GRADE_CUTOFFS": {
+                "Pass": 0.5,
+            },
+        }
+
+        self._update_grading_policy(grading_policy)
+        self._enable_if_needed(enable_vertical)
+        self._build_from_tree(tree)
+        self._check_tree(tree, self.course)
+
+        pc = CourseGradeFactory().create(self.request.user, self.course).percent
+        model_calculated_pc = self._grade_tree(tree, enable_vertical)
+        self.assertEqual(pc, model_calculated_pc)
+
+        expected_pc_vertical = (1. + 0.8 + 0.5)/3.
+        expected_pc_non_vertical = 0.75
+        expected_pc = expected_pc_vertical if enable_vertical else expected_pc_non_vertical
+        self.assertEqual(pc, round(expected_pc + 0.05 / 100, 2))
