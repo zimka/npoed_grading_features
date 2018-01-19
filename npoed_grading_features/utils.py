@@ -42,7 +42,7 @@ def get_vertical_score(
                     persisted_block,
                     block,
                 )
-                if problem_score:
+                if problem_score and problem_score.first_attempted:
                     children_scores.append(problem_score)
     if not children_scores:
         return
