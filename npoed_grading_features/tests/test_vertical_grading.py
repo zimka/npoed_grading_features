@@ -11,10 +11,9 @@ from student.tests.factories import UserFactory
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase, SharedModuleStoreTestCase
 
-from .test_utils import BuildCourseMixin
+from .test_utils import BuildCourseMixin, ContentGroupsMixin
 
 
-@patch.dict('django.conf.settings.FEATURES', {'ENABLE_VERTICAL_GRADING': True})
 class TestExpectedGrading(ModuleStoreTestCase, BuildCourseMixin):
     """
     Check that our testing method in BuildCourseMixin correctly calculates grade
@@ -166,7 +165,7 @@ class TestCourseBuilding(ModuleStoreTestCase, BuildCourseMixin):
 
 
 @ddt.ddt
-class TestVerticalGrading(ModuleStoreTestCase, BuildCourseMixin):
+class TestVerticalGrading(ModuleStoreTestCase, BuildCourseMixin, ContentGroupsMixin):
     """
     Tests different states and courses represented by tree
     """
@@ -402,3 +401,169 @@ class TestVerticalGrading(ModuleStoreTestCase, BuildCourseMixin):
         expected_pc_non_vertical = 0.75
         expected_pc = expected_pc_vertical if enable_vertical else expected_pc_non_vertical
         self.assertEqual(pc, round(expected_pc + 0.05 / 100, 2))
+
+    @ddt.data(True, False)
+    def test_drop_last_element(self, enable_vertical):
+        """
+        Tests that when we drop everything from the course by grading_policy,
+        course grade is 0
+        """
+        tree = {
+            "a": {
+                "b1": ("Homework", {  # NW 0.5; W: 0.8
+                    "c1": (1., {"d1": (1., 1.), "e1": (0., 1.)}),  # W:0/1
+                }),
+            }
+        }
+        DROP_COUNT = 1
+        grading_policy = {
+            "GRADER": [
+                {
+                    "type": "Homework",
+                    "min_count": 0,
+                    "drop_count": DROP_COUNT,
+                    "short_label": "HW",
+                    "weight": 1.,
+                },
+            ],
+            "GRADE_CUTOFFS": {
+                "Pass": 0.5,
+            },
+        }
+
+        self._update_grading_policy(grading_policy)
+        self._enable_if_needed(enable_vertical)
+        self._build_from_tree(tree)
+        self._check_tree(tree, self.course)
+
+        pc = CourseGradeFactory().create(self.request.user, self.course).percent
+        model_calculated_pc = self._grade_tree(tree, enable_vertical)
+        self.assertEqual(pc, model_calculated_pc)
+
+        self.assertEqual(pc, 0)
+
+    @ddt.data(True, False)
+    def test_drop_last_element_with_several_ss(self, enable_vertical):
+        """
+        Tests that when we drop last value from subsection in vertical grading, it improves the
+        gain
+        """
+        tree = {
+            "a": {
+                "b1": ("Homework", {
+                    "c1": (1., {"d1": (1., 1.), "e1": (0., 1.)}),
+                }),
+                "b2": ("Homework", {
+                    "c2": (1., {"d2": (1., 1.), "e2": (0., 1.)}),
+                }),
+
+            }
+        }
+        DROP_COUNT = 1
+        grading_policy = {
+            "GRADER": [
+                {
+                    "type": "Homework",
+                    "min_count": 0,
+                    "drop_count": DROP_COUNT,
+                    "short_label": "HW",
+                    "weight": 1.,
+                },
+            ],
+            "GRADE_CUTOFFS": {
+                "Pass": 0.5,
+            },
+        }
+
+        self._update_grading_policy(grading_policy)
+        self._enable_if_needed(enable_vertical)
+        self._build_from_tree(tree)
+        self._check_tree(tree, self.course)
+
+        pc = CourseGradeFactory().create(self.request.user, self.course).percent
+        model_calculated_pc = self._grade_tree(tree, enable_vertical)
+        self.assertEqual(pc, model_calculated_pc)
+
+        self.assertEqual(pc, 0.5)
+
+    @ddt.data(True, False)
+    def test_drop_optimal(self, enable_vertical):
+        """
+        Tests that unit drops chooses optimal solution:
+        We should drop c4, because we'll get (1 + 0)/(1+1) against
+        (1 + 1) / (1 + 4) if drop c3 instead
+        """
+        tree = {
+            "a": {
+                "b1": ("Homework", { #NW 0.5; W: 0.5
+                    "c1": (1., {"d1": (1., 1.), "e1": (1., 1.)}), #W: 0.5/1
+                }),
+                "b2": ("Homework", { #NW 0.5; W: 0.5
+                    "c2": (1., {"d2": (1., 1.), "e2": (1., 1.)}), #W 1/1
+                    "c3": (1., {"d3": (0., 1.)}), # 0/1
+                    "c4": (4., {"d4": (1., 1.), "e41": (0., 1.), "e42": (0., 1.), "e43": (0., 1.) }),
+                }),
+            }
+        }
+        DROP_COUNT = 1
+        grading_policy = {
+            "GRADER": [
+                {
+                    "type": "Homework",
+                    "min_count": 0,
+                    "drop_count": DROP_COUNT,
+                    "short_label": "HW",
+                    "weight": 1.,
+                },
+            ],
+            "GRADE_CUTOFFS": {
+                "Pass": 0.5,
+            },
+        }
+        self._update_grading_policy(grading_policy)
+        self._enable_if_needed(enable_vertical)
+        self._build_from_tree(tree)
+        self._check_tree(tree, self.course)
+        pc = CourseGradeFactory().create(self.request.user, self.course).percent
+        model_calculated_pc = self._grade_tree(tree, enable_vertical)
+        self.assertEqual(pc, model_calculated_pc)
+        expected_pc = (1. + 0.5)/2 if enable_vertical else 1
+        self.assertEqual(pc, expected_pc)
+
+    @ddt.data(True, False)
+    def test_drop_over_min_count(self, enable_vertical):
+        """
+        Tests that when we have mincount > 0 we still drop worst element
+        """
+        tree = {
+            "a": {
+                "b1": ("Homework", {
+                    "c1": (1., {"d1": (0., 1.), "e1": (1., 1.)}),
+                }),
+            }
+        }
+        DROP_COUNT = 1
+        MIN_COUNT = 1
+        grading_policy = {
+            "GRADER": [
+                {
+                    "type": "Homework",
+                    "min_count": MIN_COUNT,
+                    "drop_count": DROP_COUNT,
+                    "short_label": "HW",
+                    "weight": 1.,
+                },
+            ],
+            "GRADE_CUTOFFS": {
+                "Pass": 0.5,
+            },
+        }
+        self._update_grading_policy(grading_policy)
+        self._enable_if_needed(enable_vertical)
+        self._build_from_tree(tree)
+        self._check_tree(tree, self.course)
+        pc = CourseGradeFactory().create(self.request.user, self.course).percent
+        model_calculated_pc = self._grade_tree(tree, enable_vertical)
+        self.assertEqual(pc, model_calculated_pc)
+        expected_pc = 0.
+        self.assertEqual(pc, expected_pc)

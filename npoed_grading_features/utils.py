@@ -52,13 +52,14 @@ def get_vertical_score(
     weighted_possible = vertical_weight
     inner_first_attempted = list(score.first_attempted for score in children_scores)
     vertical_attempted = max(inner_first_attempted) if inner_first_attempted else None
-    vertical_graded = any(score.graded for score in children_scores)
+    vertical_graded = any(score.graded for score in children_scores) and weighted_possible
+
     vertical_pseudo_problem = ProblemScore(
-        raw_earned=vertical_earned,
-        raw_possible=vertical_possible,
+        raw_earned=weighted_earned,
+        raw_possible=weighted_possible,
         weighted_earned=weighted_earned,
         weighted_possible=weighted_possible,
-        weight=vertical_weight,
+        weight=1,
         graded=vertical_graded,
         first_attempted=vertical_attempted
     )
@@ -66,26 +67,102 @@ def get_vertical_score(
 
 
 def drop_minimal_vertical_from_subsection_grades(subsection_grades):
-    max_lost_points = -1
-    max_lost_points_index = (-1, "None")
-
-    for num, grade in enumerate(subsection_grades):
-        for block_key, problem_score in grade.problem_scores.items():
-            lost_points = problem_score.possible - problem_score.earned
-            if lost_points > max_lost_points:
-                max_lost_points = lost_points
-                max_lost_points_index = (num, block_key)
-    if max_lost_points == -1:
+    """
+    This function finds the worst block and drops it from the subsection grades.
+    The definition of the worst block itself is moved into _find_worst_score
+    which takes not a SubsectionGrades but pairs to ease testing.
+    """
+    tree = _build_tree_from_grades(subsection_grades)
+    best_score_drop_index = _find_worst_score(tree)
+    if best_score_drop_index is None:
         return subsection_grades
-    modified_grade = subsection_grades[max_lost_points_index[0]]
-    subtracted_score = modified_grade.problem_scores.pop(max_lost_points_index[1])
+    modified_grade = subsection_grades[best_score_drop_index[0]]
+    subtracted_score = modified_grade.problem_scores.pop(best_score_drop_index[1])
     modified_grade.graded_total.earned -= subtracted_score.earned
     modified_grade.graded_total.possible -= subtracted_score.possible
 
     #TODO: should show all total?
     modified_grade.all_total.earned -= subtracted_score.earned
     modified_grade.all_total.possible -= subtracted_score.possible
-    #TODO: should pop subsection grade or forbid to pop last problem score?
     if not modified_grade.graded_total.possible:
-        modified_grade.graded_total.possible = 1e-6
+        subsection_grades.pop(best_score_drop_index[0])
     return subsection_grades
+
+
+def _find_worst_score(subsection_grades_tree):
+    """
+    Takes structure  of category grading tree in
+    vertical grading case:
+    {
+        SubsectionKey1: {BlockKey1:(earned, possible), BlockKey2: ...},
+        SubsectionKey2: {...}
+    }
+    returns:
+        N, BlockKey - subsection number, unit's block key
+        None - if no need to drop anything(no grading elements)
+
+    """
+    best_score_drop_index = None
+    subsection_scores = {}
+    for subsection_key, subsection_unit_grades in subsection_grades_tree.iteritems():
+        earned, possible = zip(*subsection_unit_grades.values())
+        subsection_scores[subsection_key] = (sum(earned), sum(possible))
+
+    def grade_without(subsection_key, unit_key):
+        removed_grade = subsection_grades_tree[subsection_key][unit_key]
+        changed_score = subsection_scores[subsection_key]
+        modified_subsection_score = (
+            changed_score[0] - removed_grade[0],
+            changed_score[1] - removed_grade[1]
+        )
+        if modified_subsection_score[1]: # there are at least two units in subsection
+            rest_percents = [
+                (x[0] / x[1]) if (key != subsection_key)
+                else (modified_subsection_score[0]/modified_subsection_score[1])
+                for key, x in subsection_scores.iteritems()
+            ]
+        else: # this is the last unit
+            rest_percents = [
+                (x[0] / x[1])
+                for key, x in subsection_scores.iteritems()
+                if (key != subsection_key)
+            ]
+
+        if not rest_percents:
+            # this is the only possible drop, give him the highest rank
+            return 1.
+        else:
+            return sum(rest_percents)/len(rest_percents)
+
+    best_score = sum([x[0] for x in subsection_scores.values()]) / sum([x[1] for x in subsection_scores.values()])
+
+    for subsection_key, subsection_unit_grades in subsection_grades_tree.iteritems():
+        for unit_key in subsection_unit_grades:
+            score = grade_without(subsection_key, unit_key)
+            if score >= best_score:
+                best_score = score
+                best_score_drop_index = (subsection_key, unit_key)
+    return best_score_drop_index
+
+
+def _build_tree_from_grades(subsection_grades):
+    """
+    Parses subsection grades
+    :param subsection_grades:
+        {
+            SubsectionKey1: SubsectionGrade(),
+            SubsectionKey2: SubsectionGrade()...
+        }
+    :return:
+        {
+            SubsectionKey1: {UnitKey1: tuple(earned, possible), UnitKey2:...},
+            ...
+        }
+    """
+    tree = {}
+    for key, grade in subsection_grades.iteritems():
+        subtree = {}
+        for block_key, problem_score in grade.problem_scores.items():
+            subtree[block_key] = (problem_score.earned, problem_score.possible)
+        tree[key] = subtree
+    return tree

@@ -132,9 +132,11 @@ def build_assignment_format_grader(class_):
             return self.problem_grade(grade_sheet, generate_random_scores)
         drop_count = self.drop_count
         self.drop_count = 0
-        subsection_grades = grade_sheet.get(self.type, {}).values()
+        subsection_grades = grade_sheet.get(self.type, {})
         for n in range(drop_count):
-            drop_minimal_vertical_from_subsection_grades(subsection_grades)
+            subsection_grades = drop_minimal_vertical_from_subsection_grades(subsection_grades)
+        grade_sheet[self.type] = subsection_grades
+
         result = self.problem_grade(grade_sheet, generate_random_scores)
         self.drop_count = drop_count
         return result

@@ -1,6 +1,48 @@
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
+from xmodule.partitions.partitions import (
+    Group, UserPartition, MINIMUM_STATIC_PARTITION_ID
+)
+
 from lms.djangoapps.grades.tests.utils import answer_problem
 from ..models import NpoedGradingFeatures
+from ..utils import _find_worst_score
+
+
+class ContentGroupsMixin(object):
+    """
+    Methods are taken from cms/lib/xblock/test_authoring_mixin.py: AuthoringMixinTestCase
+    It is not mixin actually because contains test, so methods are just copied
+    """
+    def create_content_groups(self, content_groups):
+        """
+        Create a cohorted user partition with the specified content groups.
+        """
+        # pylint: disable=attribute-defined-outside-init
+        CONTENT_GROUPS_TITLE = "Content Groups"
+        self.content_partition = UserPartition(
+            MINIMUM_STATIC_PARTITION_ID,
+            CONTENT_GROUPS_TITLE,
+            'Contains Groups for Cohorted Courseware',
+            content_groups,
+            scheme_id='cohort'
+        )
+        self.course.user_partitions = [self.content_partition]
+        self.store.update_item(self.course, 0)
+
+    def set_staff_only(self, item_location):
+        """Make an item visible to staff only."""
+        item = self.store.get_item(item_location)
+        item.visible_to_staff_only = True
+        self.store.update_item(item, 0)
+
+    def set_group_access(self, item_location, group_ids, partition_id=None):
+        """
+        Set group_access for the specified item to the specified group
+        ids within the content partition.
+        """
+        item = self.store.get_item(item_location)
+        item.group_access[self.content_partition.id if partition_id is None else partition_id] = group_ids
+        self.store.update_item(item, 0)
 
 
 class BuildCourseMixin(object):
@@ -8,6 +50,7 @@ class BuildCourseMixin(object):
     Mixin with methods to build, validate and grade course
     represented by tree
     """
+
     def _build_from_tree(self, tree):
         """
         Builds course from tree. Tree is stored in dict in a view like this:
@@ -23,9 +66,11 @@ class BuildCourseMixin(object):
         """
         course = self.course
         request = self.request
+        self.course_tree = {}
         to_answer = []
         for section_name, section_tree in tree.iteritems():
             current_section = ItemFactory.create(parent=course, category="chapter", display_name=section_name)
+            self.course_tree[section_name] = current_section
             for subsection_name, subsection_pair in section_tree.iteritems():
                 assignment_category, subsection_tree = subsection_pair
                 current_subsection = ItemFactory.create(
@@ -35,11 +80,13 @@ class BuildCourseMixin(object):
                     graded=assignment_category is not None,
                     format=assignment_category or ""
                 )
+                self.course_tree[subsection_name] = current_subsection
                 for unit_name, unit_pair in subsection_tree.iteritems():
                     weight, unit_tree = unit_pair
                     metadata = {} if (weight is None) else {"weight": weight}
                     current_unit = ItemFactory.create(parent=current_subsection, category="vertical",
                                                       display_name=unit_name, metadata=metadata)
+                    self.course_tree[unit_name] = current_unit
                     for problem_name, problem_pair in unit_tree.iteritems():
                         earned, max_ = problem_pair
 
@@ -53,6 +100,7 @@ class BuildCourseMixin(object):
                         current_problem = ItemFactory.create(**kwargs)
                         if not (earned is None):
                             to_answer.append((current_problem, (earned, max_)))
+                        self.course_tree[problem_name] = current_problem
         # Somehow 'answer_problem' must be after course building, otherwise
         # items not created
         for problem, pair in to_answer:
@@ -154,21 +202,15 @@ class BuildCourseMixin(object):
                     [(1,3), (0,1), (None, None)],
                     [(1,1, (1,10)]
                 )
-                Drops (1,10) because have lost 9 points
             """
-            max_lost_points = -1
-            max_lost_points_index = (-1, "None")
-            for num_ss, subsection_grades in enumerate(tuple_of_subsection_unit_score_pairs):
-                for num_p, pair in enumerate(subsection_grades):
-                    if not pair[1]:
-                        continue
-                    lost_points = pair[1] - pair[0]
-                    if lost_points > max_lost_points:
-                        max_lost_points = lost_points
-                        max_lost_points_index = (num_ss, num_p)
-            if max_lost_points == -1:
-                return
-            tuple_of_subsection_unit_score_pairs[max_lost_points_index[0]].pop(max_lost_points_index[1])
+            _tree = {}
+            for subsection_num, subsection_list in enumerate(tuple_of_subsection_unit_score_pairs):
+                subsection_dict = dict((num, grade) for num, grade in enumerate(subsection_list))
+                _tree[subsection_num] = subsection_dict
+
+            best_drop_index = _find_worst_score(_tree)
+            if best_drop_index is not None:
+                tuple_of_subsection_unit_score_pairs[best_drop_index[0]].pop(best_drop_index[1])
 
         score_by_assignment_category = {}
         for _, section_tree in tree.iteritems():
@@ -189,6 +231,7 @@ class BuildCourseMixin(object):
         for assignment_category in score_by_assignment_category:
             if enable_vertical:
                 for _ in range(int(assignment_category_meta[assignment_category]["drop_count"])):
+
                     drop_minimal_vertical_from_subsection_grades_mimic(score_by_assignment_category[assignment_category])
             subsection_percents = [compute_subsection_percent(x) for x in score_by_assignment_category[assignment_category]]
             subsection_percents = sorted(subsection_percents, key=lambda x: -1 if x is None else x)
@@ -198,7 +241,8 @@ class BuildCourseMixin(object):
 
             if subsection_percents:
                 weight = assignment_category_meta[assignment_category]["weight"]
-                average_score = sum(subsection_percents)/len(subsection_percents)
+                subsection_percents = [ x for x in subsection_percents if x is not None]
+                average_score = sum(subsection_percents)/len(subsection_percents) if subsection_percents else 0
                 assignment_score = weight * average_score
                 course_score += assignment_score
 
