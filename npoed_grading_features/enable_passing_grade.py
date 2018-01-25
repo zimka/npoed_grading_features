@@ -11,36 +11,43 @@ def build_course_grading_model(class_):
     """
     Adding "passing_grade" to graders at reading to and writing from CourseGradingModel.
     """
-    def parse_grader(json_grader):
-        # manual to clear out kruft
-        result = {"type": json_grader["type"],
-                  "min_count": int(json_grader.get('min_count', 0)),
-                  "drop_count": int(json_grader.get('drop_count', 0)),
-                  "short_label": json_grader.get('short_label', None),
-                  "weight": float(json_grader.get('weight', 0)) / 100.0,
+    class UpdatedGradingModel(class_):
+        def __init__(self, course_descriptor):
+            super(UpdatedGradingModel, self).__init__(course_descriptor)
+            self._update_graders(course_descriptor)
 
-                  "passing_grade": float(json_grader.get('passing_grade', 0)) / 100.0
-                  }
+        def _update_graders(self, course_descriptor):
+            key = "passing_grade"
+            should_have = NpoedGradingFeatures.is_passing_grade_enabled(
+                course_descriptor.location.course_key
+            )
+            for g in self.graders:
+                has_key = key in g
+                if has_key and not should_have:
+                    g.pop(key)
+                if should_have and not has_key:
+                    g[key] = 0.
 
-        return result
+        @staticmethod
+        def parse_grader(json_grader):
+            # manual to clear out kruft
+            result = class_.parse_grader(json_grader)
+            passing_grade = json_grader.get('passing_grade', None)
+            if passing_grade is not None:
+                passing_grade = float(passing_grade) / 100.0
+                result["passing_grade"] = passing_grade
+            return result
 
-    def jsonize_grader(i, grader):
-        # Warning: converting weight to integer might give unwanted results due
-        # to the reason how floating point arithmetic works
-        # e.g, "0.29 * 100 = 28.999999999999996"
-        return {
-            "id": i,
-            "type": grader["type"],
-            "min_count": grader.get('min_count', 0),
-            "drop_count": grader.get('drop_count', 0),
-            "short_label": grader.get('short_label', ""),
-            "weight": grader.get('weight', 0) * 100,
+        @staticmethod
+        def jsonize_grader(i, grader):
+            result = class_.jsonize_grader(i, grader)
+            passing_grade = grader.get('passing_grade', None)
+            if passing_grade is not None:
+                passing_grade = float(passing_grade) * 100.0
+                result["passing_grade"] = passing_grade
+            return result
 
-            "passing_grade": grader.get('passing_grade', 0) * 100,
-        }
-    class_.parse_grader = staticmethod(parse_grader)
-    class_.jsonize_grader = staticmethod(jsonize_grader)
-    return class_
+    return UpdatedGradingModel
 
 
 def build_course_grade(class_):
@@ -52,7 +59,7 @@ def build_course_grade(class_):
     """
     def inner_passing_grades(course_grade):
         graders = course_grade.course_data.course.grading_policy['GRADER']
-        passing_grades = dict((x['type'], x['passing_grade']) for x in graders)
+        passing_grades = dict((x['type'], x.get('passing_grade',0)) for x in graders)
         return passing_grades
 
     def inner_categories_not_passed_messages(course_grade):
@@ -168,6 +175,8 @@ def build_is_course_passed(func):
     @wraps(func)
     def is_course_passed(course, grade_summary=None, student=None, request=None):
         course_key = course.id
+        if not NpoedGradingFeatures.is_passing_grade_enabled(course_key):
+            return func(course, grade_summary, student, request)
         failed_pass_grading = []
         if grade_summary:
             breakdown = grade_summary['section_breakdown']
@@ -175,13 +184,12 @@ def build_is_course_passed(func):
             for section in breakdown:
                 is_averaged_result = section.get('prominent', False)
                 if is_averaged_result and 'mark' in section:
-                    if section['mark'].get('detail',None):
+                    if section['mark'].get('detail', None):
                         failed_pass_grading.append(section['mark']['detail'])
         elif student:
-            if NpoedGradingFeatures.is_passing_grade_enabled(course_key):
-                failed_pass_grading = CoursePassingGradeUserStatus.get_passing_grade_status(course_key, student)
+            failed_pass_grading = CoursePassingGradeUserStatus.get_passing_grade_status(course_key, student)
 
-        is_category_grade_passed = not(failed_pass_grading)
+        is_category_grade_passed = not failed_pass_grading
         return is_category_grade_passed and func(course, grade_summary, student, request)
 
     return is_course_passed
