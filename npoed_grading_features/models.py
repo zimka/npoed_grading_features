@@ -8,6 +8,8 @@ class NpoedGradingFeatures(models.Model):
     """
     Defines for which courses which npoed grading features are enabled.
     """
+    # TODO: perhaps we should add cache
+
     course_id = models.CharField(max_length=255, unique=True)
     vertical_grading = models.BooleanField(default=False)
     passing_grade = models.BooleanField(default=False)

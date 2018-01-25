@@ -4,7 +4,7 @@ from django.conf import settings
 from .models import NpoedGradingFeatures
 
 
-def feature_enabled(course_id):
+def vertical_grading_enabled(course_id):
     return settings.FEATURES.get("ENABLE_VERTICAL_GRADING") and NpoedGradingFeatures.is_vertical_grading_enabled(course_id)
 
 VERTICAL_CATEGORY = 'vertical'
@@ -88,7 +88,6 @@ def drop_minimal_vertical_from_subsection_grades(subsection_grades):
     modified_grade.graded_total.earned -= subtracted_score.earned
     modified_grade.graded_total.possible -= subtracted_score.possible
 
-    #TODO: should show all total?
     modified_grade.all_total.earned -= subtracted_score.earned
     modified_grade.all_total.possible -= subtracted_score.possible
     if not modified_grade.graded_total.possible:

@@ -6,7 +6,7 @@ from django.conf import settings
 
 from xblock.fields import Integer, Scope
 
-from .utils import get_vertical_score, feature_enabled, drop_minimal_vertical_from_subsection_grades
+from .utils import get_vertical_score, vertical_grading_enabled, drop_minimal_vertical_from_subsection_grades
 _ = lambda text: text
 
 
@@ -31,7 +31,7 @@ def build_subsection_grade(class_):
             self.problem_scores[block_key] = vertical_pseudo_problem_score
 
     def _compute_block_score(self, *args, **kwargs):
-        if feature_enabled(self.location.course_key):
+        if vertical_grading_enabled(self.location.course_key):
             return self._vertical_compute_block_score(*args, **kwargs)
         else:
             return self._problem_compute_block_score(*args, **kwargs)
@@ -69,7 +69,7 @@ def build_zero_subsection_grade(class_):
         return locations
 
     def problem_scores(self):
-        if feature_enabled(self.location.course_key):
+        if vertical_grading_enabled(self.location.course_key):
             return self._vertical_problem_scores
         else:
             return self._old_problem_scores
@@ -88,6 +88,21 @@ def build_vertical_block(class_):
         default=0.0,
         scope=Scope.settings
     )
+
+    def student_view(self, context):
+        """
+        Shows vertical weight at the lms page.
+        We suppose that nobody would set vertical
+        weights with enabled VerticalGrading and turn
+        it off later.
+        Otherwise we would have to check if GradingFeatures
+        enabled every time we render block.
+        """
+        if getattr(self,'weight', None):
+            context['weight_string'] = _("Unit weight: {}").format(self.weight)
+        return self._student_view(context)
+    class_._student_view = class_.student_view
+    class_.student_view = student_view
     return class_
 
 
@@ -101,7 +116,7 @@ def build_create_xblock_info(func):
     def wrapped(*args, **kwargs):
         xblock = kwargs.get('xblock', False) or args[0]
         xblock_info = func(*args, **kwargs)
-        if not feature_enabled(xblock.location.course_key):
+        if not vertical_grading_enabled(xblock.location.course_key):
             return xblock_info
         if xblock_info.get("category", False) == 'vertical':
             weight = getattr(xblock, 'weight', 0)
@@ -128,7 +143,7 @@ def build_assignment_format_grader(class_):
 
     def grade(self, grade_sheet, generate_random_scores=False):
         course_key = get_course_id_from_grade_sheet(grade_sheet)
-        if not feature_enabled(course_key):
+        if not vertical_grading_enabled(course_key):
             return self.problem_grade(grade_sheet, generate_random_scores)
         drop_count = self.drop_count
         self.drop_count = 0
