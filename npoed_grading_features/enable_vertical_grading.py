@@ -162,5 +162,3 @@ def enable_vertical_grading(obj):
         constructor = replaced.get(name)
         return constructor(obj)
     return obj
-
-

@@ -206,7 +206,7 @@ class TestVerticalGrading(ModuleStoreTestCase, BuildCourseMixin, ContentGroupsMi
         tree = {
             "a": {
                 "b": ("Homework", {
-                    "c": (2., {"d": (None, 1.), "e": (None, 1.)}),
+                    "c": (2., {"d": (0, 1.), "e": (0, 1.)}),
                 }),
             }
         }
@@ -228,7 +228,7 @@ class TestVerticalGrading(ModuleStoreTestCase, BuildCourseMixin, ContentGroupsMi
         tree = {
             "a": {
                 "b": (None, {
-                    "c": (0., {"d": (None, 1.), "e": (None, 1.)}),
+                    "c": (0., {"d": (0, 1.), "e": (0, 1.)}),
                 }),
             }
         }

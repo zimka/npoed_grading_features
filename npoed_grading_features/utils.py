@@ -17,6 +17,14 @@ def get_vertical_score(
         csm_scores,
         persisted_block=None
 ):
+    """
+    In vertical grading we the basic scoring element is Unit(vertical) instead of problem.
+    To implement this we emulate vertical scoring by single ProblemScore:
+    if grading is called for vertical, we take all it's descendant problems, and set
+    unit.raw_earned = sum(problem.raw_earned),  unit.raw_possible = sum(problem.raw_possible).
+    Resulted fake ProblemScore that represent unit scores are graded as usually to calculate
+    subsection grades.
+    """
     from lms.djangoapps.grades.scores import get_score, ProblemScore # placed here to avoid circular import
 
     if block_key.category != VERTICAL_CATEGORY:
@@ -42,7 +50,7 @@ def get_vertical_score(
                     persisted_block,
                     block,
                 )
-                if problem_score and problem_score.first_attempted:
+                if problem_score:
                     children_scores.append(problem_score)
     if not children_scores:
         return
@@ -52,8 +60,7 @@ def get_vertical_score(
     weighted_possible = vertical_weight
     inner_first_attempted = list(score.first_attempted for score in children_scores)
     vertical_attempted = max(inner_first_attempted) if inner_first_attempted else None
-    vertical_graded = any(score.graded for score in children_scores) and weighted_possible
-
+    vertical_graded = any(score.graded for score in children_scores) and bool(weighted_possible)
     vertical_pseudo_problem = ProblemScore(
         raw_earned=weighted_earned,
         raw_possible=weighted_possible,

@@ -98,7 +98,7 @@ class BuildCourseMixin(object):
                         if assignment_category and not (max is None):
                             kwargs["format"] = assignment_category
                         current_problem = ItemFactory.create(**kwargs)
-                        if not (earned is None):
+                        if not (max_ is None):
                             to_answer.append((current_problem, (earned, max_)))
                         self.course_tree[problem_name] = current_problem
         # Somehow 'answer_problem' must be after course building, otherwise
