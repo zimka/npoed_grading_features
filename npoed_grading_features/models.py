@@ -1,7 +1,26 @@
-from django.db import models
-from django.contrib.auth.models import User
-from opaque_keys.edx.keys import CourseKey
 import json
+from django.contrib.auth.models import User
+from django.core.cache import cache
+from django.db import models
+from opaque_keys.edx.keys import CourseKey
+
+
+class NpoedVGCache(object):
+    """
+    Keeps cached info if vertical grading is enabled for given course
+    """
+    KEY_BASE = "VerticalGradingEnabled.{}"
+    TIMEOUT = 300
+
+    @classmethod
+    def get(cls, course_id):
+        key = cls.KEY_BASE.format(course_id)
+        return cache.get(key)
+
+    @classmethod
+    def set(cls, course_id, value):
+        key = cls.KEY_BASE.format(course_id)
+        return cache.set(key, value, cls.TIMEOUT)
 
 
 class NpoedGradingFeatures(models.Model):
@@ -16,7 +35,11 @@ class NpoedGradingFeatures(models.Model):
 
     @classmethod
     def is_vertical_grading_enabled(cls, course_id):
-        return cls._is_feature_enabled(course_id, 'vertical_grading')
+        cached = NpoedVGCache.get(course_id)
+        if cached is not None:
+            return cached
+        queried = cls._is_feature_enabled(course_id, 'vertical_grading')
+        NpoedVGCache.set(course_id, queried)
 
     @classmethod
     def is_passing_grade_enabled(cls, course_id):
