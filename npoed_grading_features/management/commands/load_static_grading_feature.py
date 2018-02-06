@@ -28,7 +28,8 @@ _STATIC_BY_TYPE = {
         "cms.static.js.views.modals.course_outline_modals.js",
         "cms.templates.course_outline.html",
         "cms.templates.js.course-outline.underscore",
-        "cms.templates.js.weight-editor.underscore"
+        "cms.templates.js.weight-editor.underscore",
+        "lms.static.templates.vert_module.html"
     ]
 }
 _ENABLED_BY_TYPE = {
