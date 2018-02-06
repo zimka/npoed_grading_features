@@ -27,11 +27,12 @@ class NpoedGradingFeatures(models.Model):
     """
     Defines for which courses which npoed grading features are enabled.
     """
-    # TODO: perhaps we should add cache
+    # TODO: we definitely must add cache
 
     course_id = models.CharField(max_length=255, unique=True)
     vertical_grading = models.BooleanField(default=False)
     passing_grade = models.BooleanField(default=False)
+    problem_best_score = models.BooleanField(default=False)
 
     @classmethod
     def is_vertical_grading_enabled(cls, course_id):
@@ -46,6 +47,10 @@ class NpoedGradingFeatures(models.Model):
         return cls._is_feature_enabled(course_id, 'passing_grade')
 
     @classmethod
+    def is_problem_best_score_enabled(cls, course_id):
+        return cls._is_feature_enabled(course_id, 'problem_best_score')
+
+    @classmethod
     def enable_vertical_grading(cls, course_id):
         cls._switch_feature(course_id, "vertical_grading", True)
 
@@ -54,12 +59,20 @@ class NpoedGradingFeatures(models.Model):
         cls._switch_feature(course_id, "passing_grade", True)
 
     @classmethod
+    def enable_problem_best_score_grade(cls, course_id):
+        cls._switch_feature(course_id, "problem_best_score", True)
+
+    @classmethod
     def disable_vertical_grading(cls, course_id):
         cls._switch_feature(course_id, "vertical_grading", False)
 
     @classmethod
     def disable_passing_grade(cls, course_id):
         cls._switch_feature(course_id, "passing_grade", False)
+
+    @classmethod
+    def disable_problem_best_score_grade(cls, course_id):
+        cls._switch_feature(course_id, "problem_best_score", False)
 
     @classmethod
     def get(cls, course_id):
