@@ -5,7 +5,7 @@ from .models import NpoedGradingFeatures
 
 
 def vertical_grading_enabled(course_id):
-    return settings.FEATURES.get("ENABLE_VERTICAL_GRADING") and NpoedGradingFeatures.is_vertical_grading_enabled(course_id)
+    return settings.FEATURES.get("ENABLE_GRADING_FEATURES") and NpoedGradingFeatures.is_vertical_grading_enabled(course_id)
 
 VERTICAL_CATEGORY = 'vertical'
 

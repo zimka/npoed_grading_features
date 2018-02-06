@@ -39,7 +39,6 @@ replaced = {
 
 
 def enable_problem_best_score(func):
-    # TODO: replace all separated settings flags by ENABLE_GRADING_FEATURES
     if not settings.FEATURES.get("ENABLE_GRADING_FEATURES", False):
         return func
     name = func.__name__
