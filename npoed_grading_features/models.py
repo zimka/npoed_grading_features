@@ -104,6 +104,9 @@ class NpoedGradingFeatures(models.Model):
         setattr(grading_features, feature, state)
         grading_features.save()
 
+    def __str__(self):
+        return "NGF<{}>({}/{}/{})".format(self.course_id, int(self.passing_grade), int(self.problem_best_score), int(self.vertical_grading))
+
 
 class CoursePassingGradeUserStatus(models.Model):
     """
