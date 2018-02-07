@@ -6,7 +6,7 @@ from django.conf import settings
 
 from xblock.fields import Integer, Scope
 
-from .utils import get_vertical_score, vertical_grading_enabled, drop_minimal_vertical_from_subsection_grades
+from .utils import get_vertical_score, vertical_grading_enabled, drop_minimal_vertical_from_subsection_grades, patch_function, patch_method
 _ = lambda text: text
 
 
@@ -30,20 +30,14 @@ def build_subsection_grade(class_):
         if vertical_pseudo_problem_score:
             self.problem_scores[block_key] = vertical_pseudo_problem_score
 
-    def _compute_block_score(self, *args, **kwargs):
-        if vertical_grading_enabled(self.location.course_key):
-            return self._vertical_compute_block_score(*args, **kwargs)
-        else:
-            return self._problem_compute_block_score(*args, **kwargs)
-
-    class_._problem_compute_block_score = class_._compute_block_score
-    class_._vertical_compute_block_score = _vertical_compute_block_score
-    class_._compute_block_score = _compute_block_score
+    key = lambda args, kwargs:  vertical_grading_enabled(args[0].location.course_key)
+    patch_method(class_,'compute_block_scire', _vertical_compute_block_score, dynamic_choose=key)
     return class_
 
 
 def build_zero_subsection_grade(class_):
 
+    @lazy
     def _vertical_problem_scores(self):
         """
         Overrides the problem_scores member variable in order
@@ -74,9 +68,8 @@ def build_zero_subsection_grade(class_):
         else:
             return self._old_problem_scores
 
-    class_._old_problem_scores= class_.problem_scores
-    class_._vertical_problem_scores = lazy(_vertical_problem_scores)
-    class_.problem_scores = property(problem_scores)
+    key = lambda args, kwargs:  vertical_grading_enabled(args[0].location.course_key)
+    patch_method(class_, "problem_scores", property(_vertical_problem_scores), dynamic_choose=key)
     return class_
 
 
@@ -98,7 +91,9 @@ def build_vertical_block(class_):
         Otherwise we would have to check if GradingFeatures
         enabled every time we render block.
         """
+        print("student_view!")
         if getattr(self,'weight', None):
+            print("add_Weight")
             context['weight_string'] = _("Unit weight: {}").format(self.weight)
         return self._student_view(context)
     class_._student_view = class_.student_view
@@ -156,7 +151,7 @@ def build_assignment_format_grader(class_):
         self.drop_count = drop_count
         return result
 
-    class_.grade = grade
+    patch_method(class_, 'grade', grade)
     return class_
 
 
@@ -170,6 +165,7 @@ replaced = {
 
 
 def enable_vertical_grading(obj):
+    print("EVEfeatures", settings.FEATURES.get("ENABLE_GRADING_FEATURES", False))
     if not settings.FEATURES.get("ENABLE_GRADING_FEATURES", False):
         return obj
     name = obj.__name__

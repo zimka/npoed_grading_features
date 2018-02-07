@@ -189,3 +189,19 @@ def patch_function(func, implementation, dynamic_key=None):
         else:
             return func(*args, **kwargs)
     return wrap_dynamic
+
+
+def patch_method(cls, name, implementation, dynamic_choose=None, is_classmethod=False):
+    old_implementation = getattr(cls, name)
+    implementation = classmethod(implementation) if is_classmethod else implementation
+    if dynamic_choose is None:
+        setattr(cls, name, implementation)
+        return
+
+    @wraps(old_implementation)
+    def wrap(*args, **kwargs):
+        if dynamic_choose(args, kwargs):
+            return implementation(*args, **kwargs)
+        else:
+            return old_implementation(*args, **kwargs)
+    setattr(cls, name, wrap)
