@@ -66,10 +66,10 @@ Vertical Grading Feature Installation
   Or copy static files manually from static/vertical_grading
 
 
-6. At the admin dashboard find NpoedGradingFeatures and add desired course with "Vertical Grading" flag on.
+5. At the admin dashboard find NpoedGradingFeatures and add desired course with "Vertical Grading" flag on.
 
 
-7. (Optional) Update staticfiles
+6. (Optional) Update staticfiles
 
 
 Passing Grade Feature Installation
@@ -100,14 +100,14 @@ Passing Grade Feature Installation
      ...
 
 
-4. Enable feature in lms and cms settings
+3. Enable feature in lms and cms settings
 
   ::
 
     FEATURES["ENABLE_GRADING_FEATURES"] = True
 
 
-5. Run django command
+4. Run django command
 
   ::
 
@@ -116,10 +116,10 @@ Passing Grade Feature Installation
   Or copy static files manually from static/vertical_grading
 
 
-6. At the admin dashboard find NpoedGradingFeatures and add desired course with "Passing Grade" flag on.
+5. At the admin dashboard find NpoedGradingFeatures and add desired course with "Passing Grade" flag on.
 
 
-7. (Optional) Update staticfiles
+6. (Optional) Update staticfiles
 
 
 Problem Best Score Installation
@@ -140,16 +140,18 @@ Problem Best Score Installation
   ::
 
      ...
-     from npoed_grading_features import enable_passing_grade
+     from npoed_grading_features import enable_problem_best_score
 
      @enable_problem_best_score
      def set_score(...):
      ...
 
 
-4. Enable feature in lms and cms settings
+3. Enable feature in lms and cms settings
 
   ::
 
     FEATURES["ENABLE_GRADING_FEATURES"] = True
 
+
+4. At the admin dashboard find NpoedGradingFeatures and add desired course with "Problem Best Score" flag on.
