@@ -244,7 +244,7 @@ def enable_passing_grade(class_):
     This decorator should be applied to the edx
     classes/functions that are mentioned as keys in 'replaced'.
     """
-    if not settings.FEATURES.get("ENABLE_PASSING_GRADE", False):
+    if not settings.FEATURES.get("ENABLE_GRADING_FEATURES", False):
         return class_
     name = class_.__name__
     if name in replaced:
