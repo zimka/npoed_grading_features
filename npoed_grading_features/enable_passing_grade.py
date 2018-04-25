@@ -128,9 +128,6 @@ def build_course_grade(class_):
                     student_percent=student_percent,
                     threshold_percent=threshold_percent
                 )
-                #message = u'Not passed. You must earn {percent} percent for this category to pass.'.format(
-                #    percent=100*passing_grades[category]
-                #)
                 section['mark'] = {'detail': message}
         return summary
 
@@ -239,15 +236,11 @@ replaced = {
 }
 
 
-def enable_passing_grade(class_):
-    """
-    This decorator should be applied to the edx
-    classes/functions that are mentioned as keys in 'replaced'.
-    """
+def enable_passing_grade(obj):
     if not settings.FEATURES.get("ENABLE_GRADING_FEATURES", False):
-        return class_
-    name = class_.__name__
+        return obj
+    name = obj.__name__
     if name in replaced:
         constructor = replaced.get(name)
-        return constructor(class_)
-    return class_
+        return constructor(obj)
+    return obj

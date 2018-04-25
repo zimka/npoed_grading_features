@@ -174,6 +174,22 @@ def _build_tree_from_grades(subsection_grades):
     return tree
 
 
+def find_drop_index(percents, weights):
+    """
+    G = sum(w[i]p[i])/sum(w[i])
+    G'[j] = sum(w[i]p[i])/sum(w[i]) : i!=j
+    gain[j] = G'[j] - G
+    return: max(delta)
+    """
+    length = len(percents)
+    top = sum([percents[i]*weights[i] for i in range(length)])
+    bot = sum(weights)
+    gain = []
+    for pair in zip(weights, percents):
+        gain.append(pair[0] * (top - bot * pair[1]) / (bot - pair[0]))
+    return gain.index(max(gain))
+
+
 def patch_function(func, implementation, dynamic_key=None):
     @wraps(func)
     def wrap_static(*args, **kwargs):

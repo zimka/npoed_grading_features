@@ -1,8 +1,10 @@
 import json
+import logging
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.db import models
 from opaque_keys.edx.keys import CourseKey
+from xmodule.modulestore.django import modulestore
 
 
 class NpoedGradingFeatures(models.Model):
@@ -52,6 +54,24 @@ class NpoedGradingFeatures(models.Model):
     @classmethod
     def disable_problem_best_score_grade(cls, course_id):
         cls._switch_feature(course_id, "problem_best_score", False)
+
+    @classmethod
+    def _push_vertical_grading_to_modulestore(cls, course_key, value):
+        course_key = CourseKey.from_string(cls._get_id(course_key))
+        value = bool(value)
+        store = modulestore()
+        try:
+            course = store.get_course(course_key)
+            course.vertical_grading = value
+            store.update_item(course, 0)
+        except Exception as e:
+            message = "Failed to push vertical grading value '{}' for course '{}'.".format(
+                str(value),
+                str(course_key)
+            )
+            message += "Are NpoedGradingFeatures enabled?"
+            message += "Exception:{}".format(str(e))
+            logging.error(message)
 
     @classmethod
     def get(cls, course_id, allow_cached=False):
@@ -114,6 +134,7 @@ class NpoedGradingFeatures(models.Model):
 
     def save(self, *args, **kwargs):
         super(NpoedGradingFeatures, self).save(*args, **kwargs)
+        self._push_vertical_grading_to_modulestore(self.course_id, self.vertical_grading)
         self._set_cache()
 
     def __str__(self):
