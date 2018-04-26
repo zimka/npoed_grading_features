@@ -5,7 +5,7 @@ from django.conf import settings
 
 from xblock.fields import Integer, Scope, Boolean
 
-from .utils import find_drop_index, vertical_grading_enabled, drop_minimal_vertical_from_subsection_grades
+from .utils import find_drop_index, vertical_grading_enabled
 _ = lambda text: text
 
 
@@ -22,7 +22,6 @@ def build_course_grade(cls):
             Checks course field to decide which grading model to apply
             """
             vertical_mode = getattr(self.course_data.course, "vertical_grading", False)
-            print("use vertical mode?", vertical_mode)
             grades = []
             for subsection_key in uniqueify(course_structure.get_children(chapter_key)):
                 if not vertical_mode:
@@ -140,8 +139,26 @@ def build_assignment_format_grader(cls):
             if not scores:
                 return result
             self.drop_count = drop_count
+
             breakdown = result['section_breakdown']
-            percent = [x['percent'] for x in breakdown]
+            if len(breakdown) == 1:
+                # In this case AssignmentGrader returns only total score, we don't have grades per item
+                if self.drop_count == 0:
+                    return result
+                else:
+                    # AssignmentGrader didn't drop grade because we have turned off drop_count, we should do it manually
+                    breakdown[0]['percent'] = 0
+                    breakdown[0]['detail'] = u"{section_type} = {percent:.0%}".format(
+                       percent=0,
+                       section_type=self.type,
+                    )
+
+                    return {
+                        'section_breakdown': breakdown,
+                        'percent':0
+                    }
+
+            percent = [x['percent'] for x in breakdown if 'prominent' not in x]
             weights = [x.weight for x in scores]
             for k in range(self.drop_count):
                 index = find_drop_index(percent, weights)
@@ -153,10 +170,12 @@ def build_assignment_format_grader(cls):
                 total_percent = sum([weights[i]*percent[i] for i in range(len(weights))])/total_weight
             else:
                 total_percent = 0
-            return{
+            grading = {
                 "section_breakdown": breakdown,
                 "percent": total_percent
             }
+            return grading
+
     return FlexibleNpoedGrader
 
 replaced = {

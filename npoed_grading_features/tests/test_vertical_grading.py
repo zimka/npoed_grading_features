@@ -138,17 +138,18 @@ class TestCourseBuilding(ModuleStoreTestCase, BuildCourseMixin):
                 "b": ("Homework", {
                     "d": (0., {"h": (2., 5.), "i": (3., 5.),}),
                     "e": (1., {"j": (0., 1.), "k": (None, None), "l":(1.,3)}),
-                    "f": (0., {"m":(None, None)})
+                    "f": (0., {"m": (None, None)})
                 }),
                 "c": ("Homework", {
                     "g": (0, {"n": (6., 10)})
                 })
             }
         }
-        self._enable_if_needed(enable_vertical)
         self._build_from_tree(tree)
+        self._enable_if_needed(enable_vertical)
+
         self._check_tree(tree, self.course)
-        course_grade = CourseGradeFactory().create(self.request.user, self.course)
+        course_grade = CourseGradeFactory().update(self.request.user, self.course)
         pc = course_grade.percent
 
         subsection_grades = [
@@ -228,7 +229,7 @@ class TestVerticalGrading(ModuleStoreTestCase, BuildCourseMixin, ContentGroupsMi
         tree = {
             "a": {
                 "b": (None, {
-                    "c": (0., {"d": (0, 1.), "e": (0, 1.)}),
+                    "c": (1., {"d": (0, 1.), "e": (0, 1.)}),
                 }),
             }
         }
