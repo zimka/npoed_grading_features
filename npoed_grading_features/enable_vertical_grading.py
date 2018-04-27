@@ -141,6 +141,7 @@ def build_assignment_format_grader(cls):
             self.drop_count = drop_count
 
             breakdown = result['section_breakdown']
+
             if len(breakdown) == 1:
                 # In this case AssignmentGrader returns only total score, we don't have grades per item
                 if self.drop_count == 0:
@@ -152,7 +153,6 @@ def build_assignment_format_grader(cls):
                        percent=0,
                        section_type=self.type,
                     )
-
                     return {
                         'section_breakdown': breakdown,
                         'percent':0

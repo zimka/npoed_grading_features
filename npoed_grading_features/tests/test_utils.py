@@ -1,4 +1,6 @@
 from collections import namedtuple
+from openedx.core.djangolib.testing.utils import get_mock_request
+from student.tests.factories import UserFactory
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 from xmodule.partitions.partitions import (
     UserPartition, MINIMUM_STATIC_PARTITION_ID
@@ -7,6 +9,7 @@ from xmodule.partitions.partitions import (
 from lms.djangoapps.grades.tests.utils import answer_problem
 from ..models import NpoedGradingFeatures
 from ..utils import find_drop_index
+
 
 TestGrade = namedtuple('TestGrade', ["earn", "max", "weight"])
 
@@ -194,7 +197,7 @@ class BuildCourseMixin(object):
             pc = [x.earn/x.max for x in grades_list]
             w = [x.weight for x in grades_list]
             ind = find_drop_index(pc, w)
-            return [val for num, val in enumerate(grades_list) if num!=ind]
+            grades_list.pop(ind)
 
         def weighted_score(grades_list):
             percent = lambda x: x.earn/x.max if x.max else 0
@@ -220,7 +223,6 @@ class BuildCourseMixin(object):
             ((x["type"], {"weight": x["weight"], "drop_count": x["drop_count"]})
              for x in self.course.grading_policy["GRADER"])
         )
-
         for assignment_category in score_by_assignment_category:
             drop_count = int(assignment_category_meta[assignment_category]["drop_count"])
             weight = assignment_category_meta[assignment_category]["weight"]
